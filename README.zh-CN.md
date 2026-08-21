@@ -52,7 +52,32 @@
 - `Accounts` / `Limit types` 两种视图
 - 视图选择会保存在本地
 
-## 快速开始
+## 安装方式
+
+### 普通用户 — 推荐使用 DMG
+
+1. 从 [Releases](https://github.com/Supia7/quota-bar/releases/latest) 下载 `QuotaBar-macos-arm64.dmg`。
+2. 打开 DMG，把 `QuotaBar.app` 拖到 `Applications`。
+3. 第一次启动时，如果 macOS 显示警告，请右键点击应用并选择**打开**。
+
+当前 release artifact 使用 ad-hoc 签名。在加入 Apple Developer ID 签名和 notarization 之前，Gatekeeper 可能会要求确认开发者。
+
+### 终端 — 自动安装最新 release
+
+clone 仓库后运行下面一条命令。它会下载当前 Mac 架构对应的 release，验证 checksum，然后安装到 `~/Applications`。
+
+```bash
+./Scripts/install-release.sh
+```
+
+### 开发者 — 从源码构建并安装
+
+```bash
+./Scripts/install.sh
+```
+
+该命令会构建 release、生成 `.app` bundle、进行 ad-hoc 签名、复制到 `~/Applications/QuotaBar.app` 并启动应用。
+
 
 ### 环境要求
 
@@ -134,6 +159,10 @@ git diff --check
 - 每个账号独立的 stale / re-auth 状态卡片
 - 评估 OAuth token rotation 和 first-party OAuth flow
 - 完整 Xcode test target 以及 signed/notarized release pipeline
+
+## 许可证
+
+QuotaBar 使用 [MIT License](LICENSE) 发布。允许商业使用、修改、再分发和 fork，但需要保留版权和许可证声明。
 
 ## Repository
 

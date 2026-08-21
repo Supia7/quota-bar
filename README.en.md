@@ -52,7 +52,32 @@ Compare multiple accounts by account or by limit type, while keeping aliases and
 - `Accounts` and `Limit types` layouts
 - The selected layout is persisted locally
 
-## Quick start
+## Installation
+
+### For users — DMG recommended
+
+1. Download `QuotaBar-macos-arm64.dmg` from [Releases](https://github.com/Supia7/quota-bar/releases/latest).
+2. Open the DMG and drag `QuotaBar.app` to `Applications`.
+3. On first launch, if macOS shows a warning, right-click the app and choose **Open**.
+
+Current release artifacts are ad-hoc signed. Until a Developer ID signature and Apple notarization are added, Gatekeeper may ask you to confirm the developer.
+
+### Terminal — install the latest release
+
+After cloning the repository, run this one command. It downloads the release for the current Mac architecture, verifies the checksum, and installs it under `~/Applications`.
+
+```bash
+./Scripts/install-release.sh
+```
+
+### Developers — build and install from source
+
+```bash
+./Scripts/install.sh
+```
+
+This builds the release binary, creates the `.app` bundle, applies an ad-hoc signature, copies it to `~/Applications/QuotaBar.app`, and launches it.
+
 
 ### Requirements
 
@@ -134,6 +159,10 @@ The current Command Line Tools environment does not expose XCTest/Testing, so th
 - Per-account stale and re-authentication cards
 - Review provider token rotation and first-party OAuth flows
 - Full Xcode test target and signed/notarized release pipeline
+
+## License
+
+QuotaBar is released under the [MIT License](LICENSE). Commercial use, modification, redistribution, and forks are allowed; retain the copyright and license notice.
 
 ## Repository
 

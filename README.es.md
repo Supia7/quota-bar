@@ -52,7 +52,32 @@ Compara varias cuentas por cuenta o por tipo de límite, y controla los alias y 
 - Vistas `Accounts` y `Limit types`
 - La vista elegida se guarda localmente
 
-## Inicio rápido
+## Instalación
+
+### Para usuarios — DMG recomendado
+
+1. Descarga `QuotaBar-macos-arm64.dmg` desde [Releases](https://github.com/Supia7/quota-bar/releases/latest).
+2. Abre el DMG y arrastra `QuotaBar.app` a `Applications`.
+3. En el primer inicio, si macOS muestra una advertencia, haz clic derecho sobre la app y elige **Abrir**.
+
+Los artefactos actuales están firmados ad-hoc. Hasta añadir una firma Developer ID y notarización de Apple, Gatekeeper puede pedirte confirmar el desarrollador.
+
+### Terminal — instalar la última release
+
+Después de clonar el repositorio, ejecuta este comando. Descarga la release correspondiente a la arquitectura del Mac, verifica el checksum y la instala en `~/Applications`.
+
+```bash
+./Scripts/install-release.sh
+```
+
+### Desarrolladores — compilar e instalar desde el código
+
+```bash
+./Scripts/install.sh
+```
+
+Compila el binario release, crea el bundle `.app`, aplica una firma ad-hoc, lo copia a `~/Applications/QuotaBar.app` y lo abre.
+
 
 ### Requisitos
 
@@ -134,6 +159,10 @@ El entorno actual de Command Line Tools no expone los módulos XCTest/Testing, p
 - Tarjetas de estado stale / re-auth por cuenta
 - Revisar la rotación de tokens OAuth y los flujos OAuth oficiales
 - Test target completo de Xcode y pipeline de releases firmado/notarizado
+
+## Licencia
+
+QuotaBar se distribuye bajo la [MIT License](LICENSE). Se permiten el uso comercial, las modificaciones, la redistribución y los forks; conserva el aviso de copyright y la licencia.
 
 ## Repository
 

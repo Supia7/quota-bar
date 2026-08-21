@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+          - runner: macos-13
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build app bundle
+        env:
+          VERSION: ${{ github.ref_name }}
+          ARCH: ${{ matrix.arch }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist
+        run: |
+          VERSION="${VERSION#v}" ./Scripts/package-app.sh
+          mkdir -p "artifacts/${ARCH}"
+          cp "dist/QuotaBar-macos-${ARCH}.zip" "artifacts/${ARCH}/"
+          cp "dist/QuotaBar-macos-${ARCH}.dmg" "artifacts/${ARCH}/"
+
+      - name: Upload architecture artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: quotabar-${{ matrix.arch }}
+          path: artifacts/${{ matrix.arch }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: package
+    runs-on: macos-14
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create combined checksums
+        working-directory: dist
+        run: shasum -a 256 QuotaBar-macos-*.zip QuotaBar-macos-*.dmg > SHA256SUMS
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "QuotaBar ${TAG#v}" \
+            --generate-notes
