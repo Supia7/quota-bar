@@ -15,9 +15,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-26
             arch: arm64
-          - runner: macos-13
+          - runner: macos-26-intel
             arch: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
@@ -45,7 +45,7 @@ jobs:
   publish:
     name: Publish GitHub release
     needs: package
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     steps:
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4
@@ -55,7 +55,7 @@ jobs:
 
       - name: Create combined checksums
         working-directory: dist
-        run: shasum -a 256 QuotaBar-macos-*.zip QuotaBar-macos-*.dmg > SHA256SUMS
+        run: sha256sum QuotaBar-macos-*.zip QuotaBar-macos-*.dmg > SHA256SUMS
 
       - name: Publish release
         env:
