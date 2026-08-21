@@ -33,7 +33,7 @@ fi
 
 mkdir -p "$TEMP_DIR/extracted"
 ditto -x -k "$TEMP_DIR/$ARCHIVE" "$TEMP_DIR/extracted"
-SOURCE_APP="$TEMP_DIR/QuotaBar.app"
+SOURCE_APP="$TEMP_DIR/extracted/QuotaBar.app"
 if [[ ! -d "$SOURCE_APP" ]]; then
   printf 'Release archive did not contain QuotaBar.app\n' >&2
   exit 1
