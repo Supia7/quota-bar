@@ -127,7 +127,9 @@ QuotaBar 只保存文件路径和显示设置，不会把 access token 或 refre
 - 不抓取 Claude Web cookie
 - 不执行外部 CLI
 - 没有 telemetry 或 analytics
-- 刷新失败时保留上一次成功的数据
+- 每 5 分钟自动 refresh
+- 手动 Refresh 会立即请求 snapshot
+- refresh 失败时保留上一次成功的数据
 - token 过期时显示重新认证状态，不会静默调用 CLI
 
 > Claude OAuth usage endpoint 和 Codex subscription usage endpoint 都不是公开稳定 API。如果 schema 或 rate limit 改变，QuotaBar 会显示明确错误，而不是显示估算值。

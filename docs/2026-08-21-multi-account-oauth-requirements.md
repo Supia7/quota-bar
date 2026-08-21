@@ -22,7 +22,7 @@ Build a native macOS menu-bar monitor for OAuth-backed Claude and Codex subscrip
 
 3. **Live refresh**
    - Manual refresh is available.
-   - Background refresh is bounded and provider-aware; Claude OAuth usage is not polled faster than a safe 180-second interval by default.
+   - Background refresh is bounded and provider-aware; Claude OAuth usage is polled every five minutes by default.
    - Last-known data remains visible with stale/error state when a refresh fails.
 
 4. **Unlimited multi-account**

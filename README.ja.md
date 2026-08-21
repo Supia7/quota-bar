@@ -127,7 +127,9 @@ QuotaBar が保存するのはファイルパスと表示設定だけです。ac
 - Claude Web cookie の scraping なし
 - 外部 CLI の実行なし
 - telemetry / analytics なし
-- refresh に失敗しても最後に取得した画面を保持
+- Refresh は5分ごとに自動実行
+- 手動 Refresh は即時 snapshot を取得
+- Refresh に失敗しても最後に確認した画面を保持
 - token 期限切れ時に CLI を勝手に起動せず、再認証状態を表示
 
 > Claude OAuth usage endpoint と Codex subscription usage endpoint は公開安定 API ではありません。schema や rate limit が変わった場合、推定値ではなく明示的なエラーを表示します。

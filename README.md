@@ -127,6 +127,8 @@ QuotaBar stores the path and display preferences only. Access and refresh tokens
 - No Claude Web cookie scraping
 - No external CLI execution
 - No telemetry or analytics
+- Refreshes automatically every five minutes
+- Manual Refresh requests an immediate snapshot
 - Failed refreshes keep the last known screen visible
 - Expired tokens produce an explicit re-authentication state instead of silently invoking a CLI
 
