@@ -142,6 +142,22 @@ enum QuotaBarChecks {
             "Codex weekly usage must be converted to remaining percentage"
         )
 
+        let codexPrimaryFixture = try JSONSerialization.data(withJSONObject: [
+            "rate_limit": [
+                "primary_window": [
+                    "used_percent": 58,
+                    "reset_at": 1_787_803_166,
+                    "limit_window_seconds": 604_800
+                ] as [String: Any],
+                "secondary_window": NSNull()
+            ] as [String: Any]
+        ] as [String: Any])
+        let codexPrimaryWindows = try CodexUsageDecoder.decode(codexPrimaryFixture)
+        try check(
+            codexPrimaryWindows.count == 1 && codexPrimaryWindows[0].remainingPercentage == 42,
+            "Codex decoder must fall back to primary weekly window when secondary is null"
+        )
+
         try check(
             OAuthEndpointPolicy.claudeUsage.allows(URL(string: "https://api.anthropic.com/api/oauth/usage")!),
             "Claude usage host must be allowed"
