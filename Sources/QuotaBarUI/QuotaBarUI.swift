@@ -261,6 +261,11 @@ public struct QuotaMonitorView: View {
                 }
             }
             Spacer()
+            SettingsLink {
+                Label("Settings", systemImage: "gearshape")
+            }
+            .buttonStyle(.borderless)
+            .help("Open QuotaBar settings")
             Button {
                 Task { await model.refresh() }
             } label: {

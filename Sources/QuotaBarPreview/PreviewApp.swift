@@ -10,5 +10,9 @@ struct QuotaBarPreviewApp: App {
             QuotaMonitorView(model: model)
         }
         .defaultSize(width: 420, height: 560)
+
+        Settings {
+            QuotaSettingsView(model: model)
+        }
     }
 }
