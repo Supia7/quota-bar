@@ -4,17 +4,20 @@ public struct LiveOAuthQuotaProvider: QuotaProvider, Sendable {
     public let id = "oauth"
 
     private let accounts: [OAuthAccountDescriptor]
-    private let credentialLoader: FileOAuthCredentialLoader
+    private let credentialResolver: OAuthCredentialResolver
     private let httpClient: any OAuthUsageHTTPClient
+    private let tokenService: OAuthTokenService
 
     public init(
         accounts: [OAuthAccountDescriptor],
         credentialLoader: FileOAuthCredentialLoader = FileOAuthCredentialLoader(),
-        httpClient: any OAuthUsageHTTPClient = URLSessionOAuthHTTPClient()
+        httpClient: any OAuthUsageHTTPClient = URLSessionOAuthHTTPClient(),
+        tokenService: OAuthTokenService = OAuthTokenService()
     ) {
         self.accounts = accounts
-        self.credentialLoader = credentialLoader
+        self.credentialResolver = OAuthCredentialResolver(fileLoader: credentialLoader)
         self.httpClient = httpClient
+        self.tokenService = tokenService
     }
 
     public func snapshot(at date: Date) async throws -> [QuotaAccount] {
@@ -22,8 +25,8 @@ public struct LiveOAuthQuotaProvider: QuotaProvider, Sendable {
         snapshots.reserveCapacity(accounts.count)
 
         for account in accounts {
-            let credential = try credentialLoader.load(account)
-            let (windows, resolvedEmail) = try await fetch(
+            let credential = try await credential(for: account)
+            let (windows, resolvedEmail) = try await fetchWithRefresh(
                 account: account,
                 credential: credential
             )
@@ -40,6 +43,45 @@ public struct LiveOAuthQuotaProvider: QuotaProvider, Sendable {
             )
         }
         return snapshots
+    }
+
+    private func credential(for account: OAuthAccountDescriptor) async throws -> OAuthCredential {
+        let loaded = try credentialResolver.load(account)
+        guard account.credentialSource == .keychain,
+              loaded.isExpired(),
+              let refreshToken = loaded.refreshToken,
+              !refreshToken.isEmpty
+        else {
+            return loaded
+        }
+        let refreshed = try await tokenService.refresh(
+            provider: account.provider,
+            refreshToken: refreshToken
+        )
+        try credentialResolver.save(refreshed, for: account)
+        return refreshed
+    }
+
+    private func fetchWithRefresh(
+        account: OAuthAccountDescriptor,
+        credential: OAuthCredential
+    ) async throws -> ([QuotaWindow], String) {
+        do {
+            return try await fetch(account: account, credential: credential)
+        } catch OAuthNetworkError.reauthenticationRequired {
+            guard account.credentialSource == .keychain,
+                  let refreshToken = credential.refreshToken,
+                  !refreshToken.isEmpty
+            else {
+                throw OAuthNetworkError.reauthenticationRequired
+            }
+            let refreshed = try await tokenService.refresh(
+                provider: account.provider,
+                refreshToken: refreshToken
+            )
+            try credentialResolver.save(refreshed, for: account)
+            return try await fetch(account: account, credential: refreshed)
+        }
     }
 
     private func fetch(

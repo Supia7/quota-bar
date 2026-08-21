@@ -80,9 +80,9 @@ clone 仓库后运行下面一条命令。它会下载当前 Mac 架构对应的
 
 ### 更新机制
 
-QuotaBar 会在启动时以及每 6 小时检查 GitHub Releases。如果有新版本，Monitor 和 Settings 会显示 release 链接。用户确认 release 后安装 DMG；应用不会调用 CLI，也不会静默替换可执行文件。
+QuotaBar 会在启动时和每 6 小时检查 GitHub Releases。从 v0.1.8 开始，Sparkle 会先验证已签名的 HTTPS appcast 和更新压缩包，再提供更新。更新仍需要用户确认；QuotaBar 不会静默替换可执行文件。
 
-当前构建使用 ad-hoc 签名，因此暂时不会进行无人值守替换。标准的下一步是使用 Sparkle 2.9.6，并配置 Developer ID 签名、Apple notarization、HTTPS appcast，以及保存在仓库之外的 Ed25519 key。
+v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加了应用内 OAuth 登录；之后的版本可以使用已签名的 Sparkle 更新路径。
 
 ### 环境要求
 
@@ -103,26 +103,23 @@ swift run QuotaBar
 
 ### 连接账号
 
-打开 Settings 并选择 `Add OAuth account` 后，QuotaBar 会自动检测所选 provider 的标准 credential 路径。
+打开 Settings，选择 `Sign in with Claude` 或 `Sign in with Codex`，即可在浏览器中开始 OAuth 登录。完成授权后，将 callback URL 或 authorization code 粘贴回 QuotaBar。QuotaBar 会交换 code，先验证一次真实 quota 响应，成功后才把 access / refresh token 保存到 macOS Keychain。
 
-- Claude: `~/.claude/.credentials.json`
-- Codex: `~/.codex/auth.json`
+已有 CLI 登录的用户可以使用 `Use existing credential file (fallback)`。
 
-如果文件存在，无需手动选择 JSON 即可启用按钮。只有 credential 位于其他位置时才使用 `Choose JSON…`。
+- Claude：`~/.claude/.credentials.json`
+- Codex：`~/.codex/auth.json`
 
-| Provider | 默认 credential 文件 |
-| --- | --- |
-| Claude | `~/.claude/.credentials.json` |
-| Codex | `~/.codex/auth.json` |
-
-QuotaBar 只保存文件路径和显示设置，不会把 access token 或 refresh token 复制到 QuotaBar 自己的 JSON 文件中，也没有 token 粘贴输入框。
+只有 credential 位于其他位置时才需要 JSON picker。
 
 ## 安全边界
 
+- 新 OAuth token 保存在 macOS Keychain，而不是 `accounts.json`
+- account registry 只保存 provider、alias、email、source 和去重 metadata
+- Keychain credential 通过 provider token endpoint 由应用自行 refresh
+- 已有 CLI credential file 作为兼容 fallback 保留
 - 仅支持 OAuth，不把 API key billing 数据当作订阅 quota
-- 刷新时从 provider 管理的文件中读取 credential
-- token 不会写入 QuotaBar 的持久化数据
-- Claude 和 Codex 只允许固定 HTTPS host/path
+- authorize、token、usage endpoint 受固定 HTTPS 策略限制
 - 拒绝 HTTP redirect
 - 不抓取 Claude Web cookie
 - 不执行外部 CLI
@@ -130,7 +127,7 @@ QuotaBar 只保存文件路径和显示设置，不会把 access token 或 refre
 - 每 5 分钟自动 refresh
 - 手动 Refresh 会立即请求 snapshot
 - refresh 失败时保留上一次成功的数据
-- token 过期时显示重新认证状态，不会静默调用 CLI
+- token 过期或失效时显示重新认证状态
 
 > Claude OAuth usage endpoint 和 Codex subscription usage endpoint 都不是公开稳定 API。如果 schema 或 rate limit 改变，QuotaBar 会显示明确错误，而不是显示估算值。
 
@@ -138,7 +135,8 @@ QuotaBar 只保存文件路径和显示设置，不会把 access token 或 refre
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/Library/Application Support/QuotaBar/accounts.json` | provider、alias、email、email 显示设置、credential path |
+| `~/Library/Application Support/QuotaBar/accounts.json` | provider、alias、email、source、file fallback path、去重 identity |
+| macOS Keychain (`com.supia.quotabar.oauth`) | 应用内 OAuth access / refresh token |
 | `~/Library/Application Support/QuotaBar/display-preferences.json` | 每个账号的 alias / email 显示设置 |
 
 OAuth access / refresh token 不会写入这些文件。
@@ -166,11 +164,11 @@ git diff --check
 
 ## Roadmap
 
-- provider-managed Keychain credential fallback
+- 在 provider 策略允许时，用 native callback 处理替代手动粘贴 callback
 - 通过 Claude/Codex profile endpoint 自动获取邮箱
 - 每个账号独立的 stale / re-auth 状态卡片
-- 评估 OAuth token rotation 和 first-party OAuth flow
-- 完整 Xcode test target 以及 signed/notarized release pipeline
+- 扩充 provider token rotation / revoke 场景测试
+- 持续完善完整 Xcode test target 和 signed/notarized release hardening
 
 ## 许可证
 
