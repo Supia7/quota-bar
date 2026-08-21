@@ -82,7 +82,7 @@ Compila el binario release, crea el bundle `.app`, aplica una firma ad-hoc, lo c
 
 QuotaBar consulta GitHub Releases al iniciar y cada seis horas. Desde v0.1.8, Sparkle también verifica el appcast HTTPS firmado y el archivo de actualización antes de ofrecerla. La actualización sigue requiriendo la aprobación del usuario; QuotaBar nunca reemplaza silenciosamente el ejecutable.
 
-v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. Las versiones posteriores pueden usar la ruta de actualización firmada de Sparkle.
+v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. v0.1.9 añade el inicio de sesión OAuth dentro de la app; las versiones posteriores pueden usar la ruta de actualización firmada de Sparkle.
 
 ### Requisitos
 
@@ -103,26 +103,23 @@ swift run QuotaBar
 
 ### Conectar una cuenta
 
-Abre Settings y elige `Add OAuth account`; QuotaBar detecta automáticamente la ruta estándar de credenciales del proveedor seleccionado.
+Abre Settings y elige `Sign in with Claude` o `Sign in with Codex` para iniciar el OAuth en el navegador. Después de aprobarlo, pega en QuotaBar la callback URL o el authorization code. QuotaBar intercambia el code, verifica una respuesta real de quota y solo entonces guarda los access/refresh tokens en el Keychain de macOS.
+
+Si ya tienes una sesión iniciada en el CLI, puedes usar `Use existing credential file (fallback)`.
 
 - Claude: `~/.claude/.credentials.json`
 - Codex: `~/.codex/auth.json`
 
-Si el archivo existe, el botón se habilita sin seleccionar JSON manualmente. Usa `Choose JSON…` solo si las credenciales están en otra ubicación.
-
-| Provider | Archivo de credenciales predeterminado |
-| --- | --- |
-| Claude | `~/.claude/.credentials.json` |
-| Codex | `~/.codex/auth.json` |
-
-QuotaBar solo guarda la ruta y las preferencias de visualización. No copia access tokens ni refresh tokens a sus propios archivos JSON y no ofrece un campo para pegar tokens.
+Usa el JSON picker solo si las credenciales están en otra ubicación.
 
 ## Límite de seguridad
 
+- Los nuevos tokens OAuth se guardan en el Keychain de macOS, no en `accounts.json`
+- El registro solo guarda provider, alias, email, source y metadata de deduplicación
+- Las credenciales del Keychain se actualizan mediante el token endpoint del provider
+- Los archivos de credenciales del CLI siguen disponibles como fallback de compatibilidad
 - Solo OAuth; los datos de billing de una API key no se tratan como quota de suscripción
-- Las credenciales se leen de los archivos gestionados por el provider al actualizar
-- Los tokens nunca se guardan en la persistencia de QuotaBar
-- Claude y Codex usan políticas de host/path HTTPS fijas
+- Los endpoints authorize, token y usage usan políticas HTTPS fijas
 - Los redirects HTTP se rechazan
 - No hay scraping de cookies de Claude Web
 - No se ejecutan CLI externos
@@ -130,7 +127,7 @@ QuotaBar solo guarda la ruta y las preferencias de visualización. No copia acce
 - Actualiza automáticamente cada cinco minutos
 - Refresh manual solicita un snapshot inmediato
 - Si falla la actualización, conserva la última pantalla conocida
-- Si el token caduca, se muestra un estado de reautenticación sin ejecutar un CLI en silencio
+- Si el token caduca o se revoca, se muestra un estado de reautenticación
 
 > Los endpoints de uso OAuth de Claude y de suscripción de Codex no son APIs públicas estables. Si cambia el schema o el rate limit, QuotaBar muestra un error explícito y no una estimación.
 
@@ -138,7 +135,8 @@ QuotaBar solo guarda la ruta y las preferencias de visualización. No copia acce
 
 | Ubicación | Contenido |
 | --- | --- |
-| `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, visibilidad del email y ruta de credenciales |
+| `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, source, ruta del fallback de archivos y metadata de deduplicación |
+| Keychain de macOS (`com.supia.quotabar.oauth`) | access/refresh tokens de OAuth dentro de la app |
 | `~/Library/Application Support/QuotaBar/display-preferences.json` | alias y visibilidad del email por cuenta |
 
 Los access/refresh tokens de OAuth no se escriben en estos archivos.
@@ -166,11 +164,11 @@ El entorno actual de Command Line Tools no expone los módulos XCTest/Testing, p
 
 ## Roadmap
 
-- Fallback de credenciales en Keychain gestionadas por el provider
+- Gestión nativa del callback en lugar de pegarlo manualmente cuando la política del provider lo permita
 - Obtener el email automáticamente mediante profile endpoints de Claude/Codex
 - Tarjetas de estado stale / re-auth por cuenta
-- Revisar la rotación de tokens OAuth y los flujos OAuth oficiales
-- Test target completo de Xcode y pipeline de releases firmado/notarizado
+- Ampliar las pruebas de rotación y revocación de tokens del provider
+- Seguir endureciendo el test target completo de Xcode y el pipeline firmado/notarizado
 
 ## Licencia
 

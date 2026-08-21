@@ -277,6 +277,31 @@ enum QuotaBarChecks {
         try registryStore.save(registry)
         let loadedRegistry = try registryStore.load()
         try check(loadedRegistry == registry, "account registry must round-trip to disk")
+        let duplicateDescriptor = OAuthAccountDescriptor(
+            provider: .claude,
+            alias: "Duplicate",
+            email: "other@example.com",
+            credentialPath: "~/.claude/.credentials.json"
+        )
+        try check(
+            registry.containsEquivalentAccount(duplicateDescriptor),
+            "account registry must reject duplicate provider credential paths"
+        )
+        let legacyRegistryData = try JSONSerialization.data(withJSONObject: [
+            "accounts": [[
+                "id": "00000000-0000-0000-0000-000000000010",
+                "provider": "claude",
+                "alias": "Work Claude",
+                "email": "work@example.com",
+                "isEmailHidden": false,
+                "credentialPath": "~/.claude/.credentials.json"
+            ]]
+        ] as [String: Any])
+        let legacyRegistry = try JSONDecoder().decode(AccountRegistry.self, from: legacyRegistryData)
+        try check(
+            legacyRegistry.accounts.first?.credentialSource == .file,
+            "legacy file-backed registries must decode as file credentials"
+        )
         try? FileManager.default.removeItem(at: registryURL)
 
         let preferenceURL = FileManager.default.temporaryDirectory
@@ -332,6 +357,60 @@ enum QuotaBarChecks {
         try check(samples.allSatisfy(\.isSampleData), "sample accounts must be explicitly marked")
         try check(samples.map(\.provider) == [.claude, .codex], "sample providers must be stable")
         try check(samples.allSatisfy { !$0.windows.isEmpty }, "sample accounts must contain quota windows")
+
+        let codexLogin = try OAuthAuthorizationConfiguration.makeRequest(for: .codex)
+        try check(
+            codexLogin.url.host == "auth.openai.com"
+                && codexLogin.redirectURI == "http://localhost:1455/auth/callback",
+            "Codex login must use the official PKCE authorization host and callback"
+        )
+        try check(
+            codexLogin.url.absoluteString.contains("client_id=app_EMoamEEZ73f0CkXaXp7hrann")
+                && codexLogin.url.absoluteString.contains("code_challenge_method=S256"),
+            "Codex login URL must contain the registered client and S256 PKCE"
+        )
+        let claudeLogin = try OAuthAuthorizationConfiguration.makeRequest(for: .claude)
+        try check(
+            claudeLogin.url.host == "claude.com"
+                && claudeLogin.redirectURI == "https://platform.claude.com/oauth/code/callback",
+            "Claude login must use the official authorization host and fixed callback"
+        )
+        try check(
+            claudeLogin.url.absoluteString.contains("client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e")
+                && claudeLogin.url.absoluteString.contains("code_challenge_method=S256"),
+            "Claude login URL must contain the registered client and S256 PKCE"
+        )
+        let tokenFixture = try JSONSerialization.data(withJSONObject: [
+            "access_token": "access-fixture",
+            "refresh_token": "refresh-fixture",
+            "expires_in": 3600,
+            "account_id": "account-fixture"
+        ] as [String: Any])
+        let tokenCredential = try OAuthTokenResponseDecoder.decode(
+            tokenFixture,
+            provider: .codex,
+            now: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        try check(
+            tokenCredential.accessToken == "access-fixture"
+                && tokenCredential.refreshToken == "refresh-fixture"
+                && tokenCredential.accountID == "account-fixture",
+            "OAuth token response must decode into an in-memory credential"
+        )
+        let keychainStore = KeychainOAuthCredentialStore()
+        let keychainID = UUID()
+        try keychainStore.save(tokenCredential, for: keychainID)
+        let keychainCredential = try keychainStore.load(for: keychainID)
+        try check(
+            keychainCredential == tokenCredential,
+            "Keychain OAuth credentials must round-trip without using the registry"
+        )
+        try keychainStore.delete(for: keychainID)
+        let deletedCredential = try keychainStore.load(for: keychainID)
+        try check(
+            deletedCredential == nil,
+            "Deleted Keychain OAuth credentials must not remain available"
+        )
 
         print("QuotaBarChecks: all checks passed")
     }

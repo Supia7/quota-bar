@@ -82,7 +82,7 @@ This builds the release binary, creates the `.app` bundle, applies an ad-hoc sig
 
 QuotaBar checks GitHub Releases when it launches and every six hours. Starting with v0.1.8, Sparkle also verifies the signed HTTPS appcast and update archive before offering an update. Updates still require user approval; QuotaBar never performs a silent executable replacement.
 
-Because v0.1.7 predates Sparkle, users on v0.1.7 must install v0.1.8 once from the DMG. Later versions can use the signed Sparkle update path.
+Because v0.1.7 predates Sparkle, users on v0.1.7 must install v0.1.8 once from the DMG. v0.1.9 adds in-app OAuth sign-in; later versions can use the signed Sparkle update path.
 
 ### Requirements
 
@@ -103,26 +103,23 @@ swift run QuotaBar
 
 ### Connect an account
 
-Open Settings and choose `Add OAuth account`. QuotaBar automatically detects the standard credential path for the selected provider:
+Open Settings and choose `Sign in with Claude` or `Sign in with Codex` to start a provider OAuth login in your browser. After approval, paste the callback URL or authorization code back into QuotaBar. QuotaBar exchanges the code, verifies one real quota response, and only then stores the resulting access/refresh tokens in the macOS Keychain.
+
+`Use existing credential file (fallback)` remains available for users who already have a CLI login:
 
 - Claude: `~/.claude/.credentials.json`
 - Codex: `~/.codex/auth.json`
 
-If the detected file exists, the button is enabled and no JSON picker is needed. Use `Choose JSON…` only when your credentials are stored elsewhere.
-
-| Provider | Default credential file |
-| --- | --- |
-| Claude | `~/.claude/.credentials.json` |
-| Codex | `~/.codex/auth.json` |
-
-QuotaBar stores the path and display preferences only. Access and refresh tokens are not copied into QuotaBar-owned JSON, and there is no token paste field.
+Use the JSON picker only when the credential is stored elsewhere.
 
 ## Security boundary
 
+- New OAuth tokens are stored in the macOS Keychain, not `accounts.json`
+- Account registry stores only provider, alias, email, source metadata, and deduplication identity
+- App-owned Keychain credentials refresh through the provider token endpoint
+- Existing CLI credential files remain a compatibility fallback
 - OAuth only — API-key billing data is not treated as subscription quota
-- Credentials are read from provider-managed files at refresh time
-- Token values never enter QuotaBar-owned persistence
-- Claude and Codex use fixed HTTPS host/path policies
+- Claude and Codex use fixed HTTPS authorization/token/usage endpoint policies
 - HTTP redirects are rejected
 - No Claude Web cookie scraping
 - No external CLI execution
@@ -130,7 +127,7 @@ QuotaBar stores the path and display preferences only. Access and refresh tokens
 - Refreshes automatically every five minutes
 - Manual Refresh requests an immediate snapshot
 - Failed refreshes keep the last known screen visible
-- Expired tokens produce an explicit re-authentication state instead of silently invoking a CLI
+- Expired or revoked tokens produce an explicit re-authentication state
 
 > The Claude OAuth usage endpoint and Codex subscription usage endpoint are not public stable APIs. If their schema or rate-limit policy changes, QuotaBar reports an explicit error rather than showing an estimate.
 
@@ -138,7 +135,8 @@ QuotaBar stores the path and display preferences only. Access and refresh tokens
 
 | Location | Contents |
 | --- | --- |
-| `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, email visibility, credential path |
+| `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, source, credential path when using file fallback, deduplication identity |
+| macOS Keychain (`com.supia.quotabar.oauth`) | access/refresh tokens for in-app OAuth accounts |
 | `~/Library/Application Support/QuotaBar/display-preferences.json` | per-account alias and email display settings |
 
 OAuth access and refresh tokens are not written to these files.
@@ -166,11 +164,11 @@ The current Command Line Tools environment does not expose XCTest/Testing, so th
 
 ## Roadmap
 
-- Provider-managed Keychain credential fallback
+- Native callback handling instead of manual callback paste where provider policy permits
 - Automatic email lookup through Claude/Codex profile endpoints
 - Per-account stale and re-authentication cards
-- Review provider token rotation and first-party OAuth flows
-- Full Xcode test target and signed/notarized release pipeline
+- Broader provider token-rotation and revocation tests
+- Full Xcode test target and continued signed/notarized release hardening
 
 ## License
 

@@ -1,7 +1,14 @@
+import AppKit
 import Combine
 import QuotaBarCore
 import SwiftUI
 import UniformTypeIdentifiers
+
+public enum QuotaBarAccountMutationError: Error, Equatable {
+    case duplicateAccount
+    case credentialStorageFailed
+    case usageValidationFailed
+}
 
 public enum QuotaBarUpdateState: Equatable {
     case idle
@@ -48,10 +55,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.8"
+        ) as? String ?? "0.1.9"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 8)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 9)
         let registry = (try? registryStore.load()) ?? AccountRegistry()
         configuredAccounts = registry.accounts
         if let provider {
@@ -163,13 +170,55 @@ public final class QuotaBarModel: ObservableObject {
     }
 
     public func addAccount(_ descriptor: OAuthAccountDescriptor) {
+        guard !AccountRegistry(accounts: configuredAccounts).containsEquivalentAccount(descriptor) else {
+            errorMessage = "This OAuth account is already connected."
+            return
+        }
         configuredAccounts.append(descriptor)
         saveRegistry()
         provider = LiveOAuthQuotaProvider(accounts: configuredAccounts)
         Task { await refresh() }
     }
 
+    public func addKeychainAccount(
+        provider providerID: QuotaProviderID,
+        credential: OAuthCredential,
+        alias: String,
+        email: String
+    ) async throws {
+        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedEmail = normalizedEmail.isEmpty ? (credential.email ?? "") : normalizedEmail
+        let descriptor = OAuthAccountDescriptor(
+            provider: providerID,
+            alias: alias.trimmingCharacters(in: .whitespacesAndNewlines),
+            email: resolvedEmail,
+            credentialSource: .keychain,
+            credentialIdentity: credential.accountID
+                ?? (resolvedEmail.isEmpty ? nil : resolvedEmail)
+        )
+        guard !AccountRegistry(accounts: configuredAccounts).containsEquivalentAccount(descriptor) else {
+            throw QuotaBarAccountMutationError.duplicateAccount
+        }
+
+        let keychainStore = KeychainOAuthCredentialStore()
+        do {
+            try keychainStore.save(credential, for: descriptor.id)
+            _ = try await LiveOAuthQuotaProvider(accounts: [descriptor]).snapshot(at: Date())
+        } catch {
+            try? keychainStore.delete(for: descriptor.id)
+            throw QuotaBarAccountMutationError.usageValidationFailed
+        }
+
+        configuredAccounts.append(descriptor)
+        saveRegistry()
+        self.provider = LiveOAuthQuotaProvider(accounts: configuredAccounts)
+        await refresh()
+    }
+
     public func removeAccount(id: UUID) {
+        if let descriptor = configuredAccounts.first(where: { $0.id == id }) {
+            try? OAuthCredentialResolver().delete(descriptor)
+        }
         configuredAccounts.removeAll { $0.id == id }
         saveRegistry()
         provider = configuredAccounts.isEmpty
@@ -617,6 +666,10 @@ public struct QuotaSettingsView: View {
     @State private var email = ""
     @State private var credentialPath = ""
     @State private var isImporterPresented = false
+    @State private var oauthRequest: OAuthAuthorizationRequest?
+    @State private var callbackInput = ""
+    @State private var isCompletingOAuth = false
+    @State private var oauthError: String?
 
     private var suggestedCredentialPath: String {
         OAuthCredentialPathDiscovery.existingPath(for: provider)
@@ -646,6 +699,54 @@ public struct QuotaSettingsView: View {
         )
     }
 
+    private var inAppOAuthSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Sign in to QuotaBar")
+                .font(.headline)
+            Text("Open the provider login in your browser once. QuotaBar stores the resulting OAuth tokens in the macOS Keychain and refreshes them itself.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Button("Sign in with Claude") {
+                    startOAuthLogin(for: .claude)
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Sign in with Codex") {
+                    startOAuthLogin(for: .codex)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+
+            if let oauthRequest {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Finish sign-in in your browser, then paste the callback URL or code here.")
+                        .font(.caption)
+                    TextField("Callback URL or authorization code", text: $callbackInput)
+                        .textFieldStyle(.roundedBorder)
+                    HStack {
+                        Button(isCompletingOAuth ? "Completing…" : "Complete sign-in") {
+                            Task { await completeOAuthLogin(oauthRequest) }
+                        }
+                        .disabled(isCompletingOAuth || callbackInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Button("Cancel") {
+                            self.oauthRequest = nil
+                            callbackInput = ""
+                            oauthError = nil
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(10)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            }
+            if let oauthError {
+                Label(oauthError, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -661,6 +762,8 @@ public struct QuotaSettingsView: View {
                 }
                 Text("Claude and Codex OAuth subscriptions only.")
                     .foregroundStyle(.secondary)
+
+                inAppOAuthSection
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -719,7 +822,11 @@ public struct QuotaSettingsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(account.alias.isEmpty ? account.email : account.alias)
                                         .font(.subheadline.weight(.medium))
-                                    Text(account.email.isEmpty ? account.credentialPath : account.email)
+                                    Text(account.email.isEmpty
+                                        ? (account.credentialSource == .keychain
+                                            ? "OAuth token in macOS Keychain"
+                                            : account.credentialPath)
+                                        : account.email)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
@@ -741,7 +848,7 @@ public struct QuotaSettingsView: View {
                 Divider()
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Add OAuth account")
+                    Text("Use existing credential file (fallback)")
                         .font(.headline)
                     Picker("Provider", selection: $provider) {
                         ForEach(QuotaProviderID.allCases, id: \.self) { provider in
@@ -776,7 +883,7 @@ public struct QuotaSettingsView: View {
                             isImporterPresented = true
                         }
                     }
-                    Button("Add OAuth account") {
+                    Button("Add file-backed account") {
                         model.addAccount(
                             OAuthAccountDescriptor(
                                 provider: provider,
@@ -792,9 +899,9 @@ public struct QuotaSettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Tokens stay in provider credential files", systemImage: "key.fill")
-                    Label("Only fixed HTTPS usage hosts are called", systemImage: "lock.shield")
-                    Label("Email visibility and aliases are local", systemImage: "person.crop.circle")
+                    Label("New sign-ins are stored in the macOS Keychain", systemImage: "key.fill")
+                    Label("Existing credential files remain available as a fallback", systemImage: "doc.badge.gearshape")
+                    Label("Only fixed HTTPS provider endpoints are called", systemImage: "lock.shield")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -811,6 +918,58 @@ public struct QuotaSettingsView: View {
                let url = urls.first {
                 credentialPath = url.path
             }
+        }
+    }
+
+    private func startOAuthLogin(for provider: QuotaProviderID) {
+        do {
+            let request = try OAuthAuthorizationConfiguration.makeRequest(for: provider)
+            oauthRequest = request
+            callbackInput = ""
+            oauthError = nil
+            NSWorkspace.shared.open(request.url)
+        } catch {
+            oauthError = "Could not start browser login."
+        }
+    }
+
+    private func completeOAuthLogin(_ request: OAuthAuthorizationRequest) async {
+        isCompletingOAuth = true
+        oauthError = nil
+        defer { isCompletingOAuth = false }
+        do {
+            let callback = try OAuthCallbackParser.parse(
+                callbackInput,
+                expectedState: request.state
+            )
+            let credential = try await OAuthTokenService().exchange(
+                request: request,
+                callback: callback
+            )
+            try await model.addKeychainAccount(
+                provider: request.provider,
+                credential: credential,
+                alias: alias,
+                email: email
+            )
+            oauthRequest = nil
+            callbackInput = ""
+            alias = ""
+            email = ""
+        } catch QuotaBarAccountMutationError.duplicateAccount {
+            oauthError = "This OAuth account is already connected."
+        } catch QuotaBarAccountMutationError.usageValidationFailed {
+            oauthError = "Sign-in succeeded, but quota could not be verified. The account was not saved."
+        } catch OAuthLoginError.stateMismatch {
+            oauthError = "The callback state did not match. Start sign-in again."
+        } catch OAuthLoginError.invalidCallback {
+            oauthError = "Paste the complete callback URL or authorization code."
+        } catch OAuthNetworkError.rateLimited {
+            oauthError = "The provider rate-limited token exchange. Try again shortly."
+        } catch OAuthNetworkError.reauthenticationRequired {
+            oauthError = "The provider rejected the login. Start sign-in again."
+        } catch {
+            oauthError = "OAuth sign-in could not be completed."
         }
     }
 }
