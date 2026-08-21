@@ -103,7 +103,12 @@ swift run QuotaBar
 
 ### 계정 연결
 
-앱의 Settings에서 `Add OAuth account`를 선택하고 provider credential JSON 파일을 지정합니다.
+앱의 Settings에서 `Add OAuth account`를 선택하면 provider 기본 credential 경로를 자동으로 찾습니다.
+
+- Claude: `~/.claude/.credentials.json`
+- Codex: `~/.codex/auth.json`
+
+파일이 있으면 JSON을 직접 선택하지 않아도 버튼이 활성화됩니다. 다른 위치에 credential을 둔 경우에만 `Choose JSON…`을 사용하면 됩니다.
 
 | Provider | 기본 credential 파일 |
 | --- | --- |

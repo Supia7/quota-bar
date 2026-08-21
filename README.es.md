@@ -103,7 +103,12 @@ swift run QuotaBar
 
 ### Conectar una cuenta
 
-Abre Settings, elige `Add OAuth account` y selecciona el archivo JSON de credenciales del provider.
+Abre Settings y elige `Add OAuth account`; QuotaBar detecta automáticamente la ruta estándar de credenciales del proveedor seleccionado.
+
+- Claude: `~/.claude/.credentials.json`
+- Codex: `~/.codex/auth.json`
+
+Si el archivo existe, el botón se habilita sin seleccionar JSON manualmente. Usa `Choose JSON…` solo si las credenciales están en otra ubicación.
 
 | Provider | Archivo de credenciales predeterminado |
 | --- | --- |

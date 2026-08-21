@@ -103,7 +103,12 @@ swift run QuotaBar
 
 ### アカウントを接続
 
-Settings から `Add OAuth account` を選び、provider の credential JSON を指定します。
+Settings から `Add OAuth account` を選ぶと、選択した provider の標準 credential パスを自動検出します。
+
+- Claude: `~/.claude/.credentials.json`
+- Codex: `~/.codex/auth.json`
+
+ファイルが存在すれば JSON を手動選択する必要はありません。別の場所に保存している場合のみ `Choose JSON…` を使用します。
 
 | Provider | 標準の credential ファイル |
 | --- | --- |

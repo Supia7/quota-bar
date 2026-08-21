@@ -215,6 +215,29 @@ enum QuotaBarChecks {
             "Codex OAuth credentials must decode from provider auth.json"
         )
 
+        let discoveryHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quotabar-home-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: discoveryHome, withIntermediateDirectories: true)
+        let discoveredCodexPath = discoveryHome.appendingPathComponent(".codex/auth.json")
+        try FileManager.default.createDirectory(
+            at: discoveredCodexPath.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try codexCredentialData.write(to: discoveredCodexPath, options: .atomic)
+        try check(
+            OAuthCredentialPathDiscovery.defaultPath(for: .codex, homeDirectory: discoveryHome)
+                == discoveredCodexPath.path,
+            "Codex default credential path must be discovered"
+        )
+        try check(
+            OAuthCredentialPathDiscovery.existingPath(
+                for: .codex,
+                homeDirectory: discoveryHome
+            ) == discoveredCodexPath.path,
+            "Existing Codex credentials must be detected automatically"
+        )
+        try? FileManager.default.removeItem(at: discoveryHome)
+
         let registry = AccountRegistry(accounts: [
             OAuthAccountDescriptor(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000010")!,

@@ -103,7 +103,12 @@ swift run QuotaBar
 
 ### Connect an account
 
-Open Settings, choose `Add OAuth account`, and select the provider credential JSON file.
+Open Settings and choose `Add OAuth account`. QuotaBar automatically detects the standard credential path for the selected provider:
+
+- Claude: `~/.claude/.credentials.json`
+- Codex: `~/.codex/auth.json`
+
+If the detected file exists, the button is enabled and no JSON picker is needed. Use `Choose JSON…` only when your credentials are stored elsewhere.
 
 | Provider | Default credential file |
 | --- | --- |
