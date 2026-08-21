@@ -21,7 +21,7 @@ struct QuotaBarApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            QuotaSettingsView()
+            QuotaSettingsView(model: model)
         }
     }
 }
