@@ -1,10 +1,10 @@
 # QuotaBar
 
-**Claude와 Codex OAuth 구독 사용량을 한눈에 보는 macOS 메뉴바 앱**
+**A native macOS menu-bar monitor for Claude and Codex OAuth subscription usage.**
 
-여러 계정의 제한을 계정별 또는 제한 종류별로 비교하고, 별칭과 이메일 표시 정책까지 직접 관리합니다.
+Compare multiple accounts by account or by limit type, while keeping aliases and email visibility under your control.
 
-[한국어](README.md) · [English](README.en.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md)
+[한국어](README.ko.md) · [English](README.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md) · [Español](README.es.md)
 
 <p>
   <a href="https://github.com/Supia7/quota-bar"><img src="https://img.shields.io/badge/platform-macOS%2026%2B-black?logo=apple" alt="macOS 26+"></a>
@@ -12,11 +12,11 @@
   <a href="https://github.com/Supia7/quota-bar"><img src="https://img.shields.io/badge/auth-OAuth%20only-6f42c1" alt="OAuth only"></a>
 </p>
 
-> **현재 상태:** 초기 공개 버전입니다. Claude/Codex 사용량 endpoint는 공식 공개 billing API가 아니라 각 coding client가 사용하는 내부 endpoint이므로, provider 변경에 대비한 명시적 오류 처리를 포함합니다.
+> **Status:** Early public release. Claude and Codex usage endpoints are internal endpoints used by their coding clients rather than stable public billing APIs, so provider changes are handled as explicit errors instead of guesses.
 
-## 화면
+## Screenshots
 
-> 아래 화면은 credential을 연결하지 않은 **샘플 데이터**입니다. 실제 토큰이나 계정정보는 포함되어 있지 않습니다.
+> These screenshots use **sample data** with no connected credentials. No real tokens or account data are included.
 
 <table>
   <tr>
@@ -24,68 +24,68 @@
     <td width="50%"><img src="docs/images/quotabar-limit-types.png" alt="Limit types view grouping five-hour, weekly, and Fable limits"></td>
   </tr>
   <tr>
-    <td align="center"><sub>계정 중심 보기</sub></td>
-    <td align="center"><sub>제한 종류 중심 보기</sub></td>
+    <td align="center"><sub>Accounts view</sub></td>
+    <td align="center"><sub>Limit types view</sub></td>
   </tr>
 </table>
 
-## 무엇을 보여주나요?
+## What it shows
 
 ### Claude
 
-- 5시간 rolling window
-- 전체 모델 Weekly 제한
-- Fable/model-scoped Weekly 제한
-- Fable 데이터가 provider 응답에 없으면 0%로 추정하지 않고 `Unavailable` 표시
+- Five-hour rolling window
+- All-model weekly limit
+- Fable/model-scoped weekly limit
+- If Fable data is absent, QuotaBar shows `Unavailable` instead of inventing 0% usage
 
 ### Codex
 
-- OAuth 구독 Weekly 제한
-- reset 시각과 잔여 비율
+- OAuth subscription weekly limit
+- Remaining percentage and reset time
 
-### 계정 관리
+### Account management
 
-- 계정 수 제한 없음
-- 계정별 고정 UUID로 관리 — 이메일이 같아도 별도 계정으로 유지
-- 계정 별칭 편집
-- provider 이메일 표시 또는 숨김
-- `Accounts` / `Limit types` 뷰 전환
-- 선택한 뷰는 로컬에 기억
+- No hard account limit
+- Stable per-account UUIDs — duplicate emails remain separate accounts
+- Editable local aliases
+- Show or hide the provider email per account
+- `Accounts` and `Limit types` layouts
+- The selected layout is persisted locally
 
-## 설치 방법
+## Installation
 
-### 일반 사용자 — DMG 권장
+### For users — DMG recommended
 
-1. [Releases](https://github.com/Supia7/quota-bar/releases/latest)에서 `QuotaBar-macos-arm64.dmg`를 다운로드합니다.
-2. DMG를 열고 `QuotaBar.app`을 `Applications`로 드래그합니다.
-3. 처음 실행할 때 macOS 경고가 나오면 앱을 우클릭한 뒤 **열기**를 선택합니다.
+1. Download `QuotaBar-macos-arm64.dmg` from [Releases](https://github.com/Supia7/quota-bar/releases/latest).
+2. Open the DMG and drag `QuotaBar.app` to `Applications`.
+3. On first launch, if macOS shows a warning, right-click the app and choose **Open**.
 
-현재 release artifact는 ad-hoc 서명 상태입니다. Apple Developer ID 서명과 notarization을 추가하기 전까지는 Gatekeeper에서 개발자 확인을 요청할 수 있습니다.
+Current release artifacts are ad-hoc signed. Until a Developer ID signature and Apple notarization are added, Gatekeeper may ask you to confirm the developer.
 
-### 터미널 — 최신 release 자동 설치
+### Terminal — install the latest release
 
-저장소를 clone한 뒤 아래 한 줄을 실행하면 현재 Mac 아키텍처에 맞는 release를 다운로드하고 checksum을 확인한 뒤 `~/Applications`에 설치합니다.
+After cloning the repository, run this one command. It downloads the release for the current Mac architecture, verifies the checksum, and installs it under `~/Applications`.
 
 ```bash
 ./Scripts/install-release.sh
 ```
 
-### 개발자 — 소스에서 빌드 및 설치
+### Developers — build and install from source
 
 ```bash
 ./Scripts/install.sh
 ```
 
-위 명령은 release 빌드, `.app` bundle 생성, ad-hoc 서명, `~/Applications/QuotaBar.app` 복사, 실행까지 처리합니다.
+This builds the release binary, creates the `.app` bundle, applies an ad-hoc signature, copies it to `~/Applications/QuotaBar.app`, and launches it.
 
 
-### 요구사항
+### Requirements
 
 - macOS 26+
 - Swift 6.2+
-- Claude Code 또는 Codex가 관리하는 OAuth credential JSON
+- OAuth credential JSON managed by Claude Code or Codex
 
-### 빌드 및 실행
+### Build and run
 
 ```bash
 swift run QuotaBarChecks
@@ -94,54 +94,54 @@ swift build --product QuotaBarPreview
 swift run QuotaBar
 ```
 
-`QuotaBarPreview`는 동일한 Monitor UI를 일반 창에서 확인하기 위한 개발용 target입니다.
+`QuotaBarPreview` displays the same Monitor UI in a regular window for development and visual QA.
 
-### 계정 연결
+### Connect an account
 
-앱의 Settings에서 `Add OAuth account`를 선택하고 provider credential JSON 파일을 지정합니다.
+Open Settings, choose `Add OAuth account`, and select the provider credential JSON file.
 
-| Provider | 기본 credential 파일 |
+| Provider | Default credential file |
 | --- | --- |
 | Claude | `~/.claude/.credentials.json` |
 | Codex | `~/.codex/auth.json` |
 
-QuotaBar는 파일 경로와 표시 설정만 저장합니다. access token과 refresh token을 QuotaBar의 JSON 파일로 복사하지 않으며, 토큰 입력란도 제공하지 않습니다.
+QuotaBar stores the path and display preferences only. Access and refresh tokens are not copied into QuotaBar-owned JSON, and there is no token paste field.
 
-## 보안 경계
+## Security boundary
 
-- OAuth 전용 — API key billing 데이터를 구독 quota로 취급하지 않음
-- credential은 provider-managed 파일에서 refresh 시점에 읽음
-- QuotaBar 자체 저장소에는 token 값이 들어가지 않음
-- Claude와 Codex 각각 고정된 HTTPS host/path만 허용
-- HTTP redirect는 거부
-- Claude Web cookie scraping 없음
-- 외부 CLI 실행 없음
-- telemetry와 analytics 없음
-- refresh 실패 시 마지막으로 확인한 화면을 유지
-- token 만료 시 조용히 CLI를 실행하지 않고 재인증 필요 상태로 처리
+- OAuth only — API-key billing data is not treated as subscription quota
+- Credentials are read from provider-managed files at refresh time
+- Token values never enter QuotaBar-owned persistence
+- Claude and Codex use fixed HTTPS host/path policies
+- HTTP redirects are rejected
+- No Claude Web cookie scraping
+- No external CLI execution
+- No telemetry or analytics
+- Failed refreshes keep the last known screen visible
+- Expired tokens produce an explicit re-authentication state instead of silently invoking a CLI
 
-> Claude OAuth usage endpoint와 Codex subscription usage endpoint는 공개 안정 API가 아닙니다. endpoint schema나 rate limit 정책이 바뀌면 QuotaBar는 추정값 대신 명시적 오류를 보여줍니다.
+> The Claude OAuth usage endpoint and Codex subscription usage endpoint are not public stable APIs. If their schema or rate-limit policy changes, QuotaBar reports an explicit error rather than showing an estimate.
 
-## 저장 데이터
+## Local data
 
-| 위치 | 내용 |
+| Location | Contents |
 | --- | --- |
 | `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, email visibility, credential path |
-| `~/Library/Application Support/QuotaBar/display-preferences.json` | 계정별 alias/email 표시 설정 |
+| `~/Library/Application Support/QuotaBar/display-preferences.json` | per-account alias and email display settings |
 
-저장 파일에는 OAuth access/refresh token을 기록하지 않습니다.
+OAuth access and refresh tokens are not written to these files.
 
-## 개발자 안내
+## Developer guide
 
 ```text
-Sources/QuotaBarCore/       도메인 모델, decoder, credential boundary, provider client
-Sources/QuotaBarUI/         메뉴바 UI, 두 view mode, polling, account editor
-Sources/QuotaBar/            메뉴바 앱 entry point
-Sources/QuotaBarPreview/     일반 창 Preview entry point
+Sources/QuotaBarCore/       domain models, decoders, credential boundary, provider client
+Sources/QuotaBarUI/         menu-bar UI, two layouts, polling, account editor
+Sources/QuotaBar/            menu-bar app entry point
+Sources/QuotaBarPreview/     regular-window Preview entry point
 Sources/QuotaBarChecks/      framework-free self-check
 ```
 
-검증 명령:
+Verification:
 
 ```bash
 swift run QuotaBarChecks
@@ -150,22 +150,22 @@ swift build --product QuotaBarPreview
 git diff --check
 ```
 
-현재 Command Line Tools 환경에서는 XCTest/Testing 모듈을 사용할 수 없어 framework-free self-check executable을 사용합니다.
+The current Command Line Tools environment does not expose XCTest/Testing, so the repository uses a framework-free self-check executable.
 
-## 다음 단계
+## Roadmap
 
-- provider-managed Keychain credential fallback
-- Claude/Codex profile endpoint 기반 이메일 자동 조회
-- 계정별 stale / re-auth 상태 카드
-- OAuth token rotation과 provider 공식 인증 흐름 검토
-- full Xcode test target 및 signed/notarized release pipeline
+- Provider-managed Keychain credential fallback
+- Automatic email lookup through Claude/Codex profile endpoints
+- Per-account stale and re-authentication cards
+- Review provider token rotation and first-party OAuth flows
+- Full Xcode test target and signed/notarized release pipeline
 
-## 라이선스
+## License
 
-QuotaBar는 [MIT License](LICENSE)로 배포됩니다. 상업적 사용, 수정, 재배포, fork를 허용하며 저작권 및 라이선스 고지를 유지해야 합니다.
+QuotaBar is released under the [MIT License](LICENSE). Commercial use, modification, redistribution, and forks are allowed; retain the copyright and license notice.
 
-## 저장소
+## Repository
 
 - GitHub: <https://github.com/Supia7/quota-bar>
-- 계획: [`docs/2026-08-21-multi-account-oauth-plan.md`](docs/2026-08-21-multi-account-oauth-plan.md)
-- 요구사항: [`docs/2026-08-21-multi-account-oauth-requirements.md`](docs/2026-08-21-multi-account-oauth-requirements.md)
+- Plan: [`docs/2026-08-21-multi-account-oauth-plan.md`](docs/2026-08-21-multi-account-oauth-plan.md)
+- Requirements: [`docs/2026-08-21-multi-account-oauth-requirements.md`](docs/2026-08-21-multi-account-oauth-requirements.md)
