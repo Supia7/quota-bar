@@ -3,6 +3,14 @@ import QuotaBarCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+public enum QuotaBarUpdateState: Equatable {
+    case idle
+    case checking
+    case upToDate(String)
+    case available(GitHubRelease)
+    case failed
+}
+
 @MainActor
 public final class QuotaBarModel: ObservableObject {
     @Published public private(set) var accounts: [QuotaAccount] = []
@@ -10,6 +18,7 @@ public final class QuotaBarModel: ObservableObject {
     @Published public private(set) var lastUpdated: Date?
     @Published public private(set) var isRefreshing = false
     @Published public private(set) var errorMessage: String?
+    @Published public private(set) var updateState: QuotaBarUpdateState = .idle
     @Published public var viewMode: UsageViewMode {
         didSet {
             UserDefaults.standard.set(viewMode.rawValue, forKey: Self.viewModeDefaultsKey)
@@ -22,14 +31,26 @@ public final class QuotaBarModel: ObservableObject {
     private let preferenceStore: JSONAccountDisplayPreferencesStore
     private var displayPreferences: [UUID: AccountDisplayPreference]
     private var pollingTask: Task<Void, Never>?
+    private var updateCheckTask: Task<Void, Never>?
+    private let updateChecker: GitHubReleaseUpdateChecker
+    private let currentVersion: ReleaseVersion
 
     public init(
         provider: (any QuotaProvider)? = nil,
         registryStore: JSONAccountRegistryStore = JSONAccountRegistryStore(),
-        preferenceStore: JSONAccountDisplayPreferencesStore = JSONAccountDisplayPreferencesStore()
+        preferenceStore: JSONAccountDisplayPreferencesStore = JSONAccountDisplayPreferencesStore(),
+        updateChecker: GitHubReleaseUpdateChecker = GitHubReleaseUpdateChecker(),
+        currentVersion: ReleaseVersion? = nil
     ) {
         self.registryStore = registryStore
         self.preferenceStore = preferenceStore
+        self.updateChecker = updateChecker
+        let bundleVersion = Bundle.main.object(
+            forInfoDictionaryKey: "CFBundleShortVersionString"
+        ) as? String ?? "0.1.2"
+        self.currentVersion = currentVersion
+            ?? (try? ReleaseVersion(bundleVersion))
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 2)
         let registry = (try? registryStore.load()) ?? AccountRegistry()
         configuredAccounts = registry.accounts
         if let provider {
@@ -43,10 +64,12 @@ public final class QuotaBarModel: ObservableObject {
         let storedMode = UserDefaults.standard.string(forKey: Self.viewModeDefaultsKey)
         viewMode = UsageViewMode(rawValue: storedMode ?? "") ?? .account
         startPolling()
+        startUpdateChecking()
     }
 
     deinit {
         pollingTask?.cancel()
+        updateCheckTask?.cancel()
     }
 
     public var menuTitle: String {
@@ -68,6 +91,11 @@ public final class QuotaBarModel: ObservableObject {
         QuotaGrouping.groups(accounts: accounts, mode: viewMode)
     }
 
+    public var availableRelease: GitHubRelease? {
+        guard case let .available(release) = updateState else { return nil }
+        return release
+    }
+
     public func startPolling() {
         guard pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
@@ -80,6 +108,37 @@ public final class QuotaBarModel: ObservableObject {
                     return
                 }
             }
+        }
+    }
+
+    private func startUpdateChecking() {
+        guard updateCheckTask == nil else { return }
+        updateCheckTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                await checkForUpdates()
+                do {
+                    try await Task.sleep(for: .seconds(6 * 60 * 60))
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    public func checkForUpdates() async {
+        if case .checking = updateState {
+            return
+        }
+        updateState = .checking
+        do {
+            if let release = try await updateChecker.check(currentVersion: currentVersion) {
+                updateState = .available(release)
+            } else {
+                updateState = .upToDate(currentVersion.description)
+            }
+        } catch {
+            updateState = .failed
         }
     }
 
@@ -236,7 +295,14 @@ public struct QuotaMonitorView: View {
             footer
         }
         .padding(16)
-        .frame(minWidth: 420, maxWidth: 420, minHeight: 340, maxHeight: 680)
+        .frame(
+            minWidth: 560,
+            idealWidth: 620,
+            maxWidth: 680,
+            minHeight: 620,
+            idealHeight: 720,
+            maxHeight: 820
+        )
         .sheet(item: $editingAccount) { account in
             AccountEditorView(account: account) { alias, isEmailHidden in
                 model.updateDisplay(
@@ -261,6 +327,13 @@ public struct QuotaMonitorView: View {
                 }
             }
             Spacer()
+            if let release = model.availableRelease {
+                Link(destination: release.pageURL) {
+                    Label("Update \(release.version.description)", systemImage: "arrow.down.circle")
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.blue)
+            }
             SettingsLink {
                 Label("Settings", systemImage: "gearshape")
             }
@@ -507,6 +580,43 @@ public struct QuotaSettingsView: View {
                     .font(.title2.weight(.semibold))
                 Text("Claude and Codex OAuth subscriptions only.")
                     .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Updates")
+                            .font(.headline)
+                        Spacer()
+                        Button {
+                            Task { await model.checkForUpdates() }
+                        } label: {
+                            Label("Check for updates", systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled({
+                            if case .checking = model.updateState { return true }
+                            return false
+                        }())
+                    }
+                    if case let .available(release) = model.updateState {
+                        Link(
+                            "QuotaBar \(release.version.description) is available — open release",
+                            destination: release.pageURL
+                        )
+                        .foregroundStyle(.blue)
+                    } else if case let .upToDate(version) = model.updateState {
+                        Text("You are up to date (\(version)).")
+                            .foregroundStyle(.secondary)
+                    } else if case .checking = model.updateState {
+                        Text("Checking GitHub Releases…")
+                            .foregroundStyle(.secondary)
+                    } else if case .failed = model.updateState {
+                        Text("Could not check GitHub Releases right now.")
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("Checks on launch and every 6 hours.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Connected accounts")

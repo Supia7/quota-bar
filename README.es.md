@@ -78,6 +78,11 @@ Después de clonar el repositorio, ejecuta este comando. Descarga la release cor
 
 Compila el binario release, crea el bundle `.app`, aplica una firma ad-hoc, lo copia a `~/Applications/QuotaBar.app` y lo abre.
 
+### Actualizaciones
+
+QuotaBar consulta GitHub Releases al iniciar y cada seis horas. Si existe una versión nueva, Monitor y Settings muestran un enlace a la release. El usuario revisa la release e instala el DMG; la app no ejecuta un CLI ni reemplaza ejecutables en silencio.
+
+Las builds actuales tienen firma ad-hoc, por lo que el reemplazo desatendido está desactivado intencionadamente. El siguiente paso estándar es Sparkle 2.9.6 con firma Developer ID, notarización de Apple, appcast HTTPS y una clave Ed25519 fuera del repositorio.
 
 ### Requisitos
 

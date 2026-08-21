@@ -155,6 +155,35 @@ enum QuotaBarChecks {
             "Codex usage host must be allowed"
         )
 
+        let currentVersion = try ReleaseVersion("0.1.2")
+        let newerVersion = try ReleaseVersion("v0.1.3")
+        try check(newerVersion > currentVersion, "new release versions must compare correctly")
+        let equalVersion = try ReleaseVersion("0.1.2")
+        try check(
+            !(equalVersion > currentVersion),
+            "equal release versions must not be treated as updates"
+        )
+        let releaseFixture = try JSONSerialization.data(withJSONObject: [
+            "tag_name": "v0.1.3",
+            "html_url": "https://github.com/Supia7/quota-bar/releases/tag/v0.1.3",
+            "assets": [
+                [
+                    "name": "QuotaBar-macos-arm64.dmg",
+                    "browser_download_url": "https://github.com/Supia7/quota-bar/releases/download/v0.1.3/QuotaBar-macos-arm64.dmg"
+                ] as [String: String],
+                [
+                    "name": "SHA256SUMS",
+                    "browser_download_url": "https://github.com/Supia7/quota-bar/releases/download/v0.1.3/SHA256SUMS"
+                ] as [String: String]
+            ] as [[String: String]]
+        ] as [String: Any])
+        let release = try GitHubReleaseDecoder.decode(releaseFixture)
+        try check(release.version == newerVersion, "GitHub release tag must decode to a version")
+        try check(
+            release.asset(named: "QuotaBar-macos-arm64.dmg") != nil,
+            "GitHub release assets must expose the architecture DMG"
+        )
+
         let claudeCredentialData = try JSONSerialization.data(withJSONObject: [
             "claudeAiOauth": [
                 "accessToken": "claude-access-token-fixture",

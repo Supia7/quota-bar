@@ -78,6 +78,11 @@ clone 仓库后运行下面一条命令。它会下载当前 Mac 架构对应的
 
 该命令会构建 release、生成 `.app` bundle、进行 ad-hoc 签名、复制到 `~/Applications/QuotaBar.app` 并启动应用。
 
+### 更新机制
+
+QuotaBar 会在启动时以及每 6 小时检查 GitHub Releases。如果有新版本，Monitor 和 Settings 会显示 release 链接。用户确认 release 后安装 DMG；应用不会调用 CLI，也不会静默替换可执行文件。
+
+当前构建使用 ad-hoc 签名，因此暂时不会进行无人值守替换。标准的下一步是使用 Sparkle 2.9.6，并配置 Developer ID 签名、Apple notarization、HTTPS appcast，以及保存在仓库之外的 Ed25519 key。
 
 ### 环境要求
 

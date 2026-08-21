@@ -9,7 +9,7 @@ struct QuotaBarPreviewApp: App {
         WindowGroup("QuotaBar Preview") {
             QuotaMonitorView(model: model)
         }
-        .defaultSize(width: 420, height: 560)
+        .defaultSize(width: 640, height: 720)
 
         Settings {
             QuotaSettingsView(model: model)
