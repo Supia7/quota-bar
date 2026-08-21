@@ -80,9 +80,9 @@ Compila el binario release, crea el bundle `.app`, aplica una firma ad-hoc, lo c
 
 ### Actualizaciones
 
-QuotaBar consulta GitHub Releases al iniciar y cada seis horas. Si existe una versión nueva, Monitor y Settings muestran un enlace a la release. El usuario revisa la release e instala el DMG; la app no ejecuta un CLI ni reemplaza ejecutables en silencio.
+QuotaBar consulta GitHub Releases al iniciar y cada seis horas. Desde v0.1.8, Sparkle también verifica el appcast HTTPS firmado y el archivo de actualización antes de ofrecerla. La actualización sigue requiriendo la aprobación del usuario; QuotaBar nunca reemplaza silenciosamente el ejecutable.
 
-Las builds actuales tienen firma ad-hoc, por lo que el reemplazo desatendido está desactivado intencionadamente. El siguiente paso estándar es Sparkle 2.9.6 con firma Developer ID, notarización de Apple, appcast HTTPS y una clave Ed25519 fuera del repositorio.
+v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. Las versiones posteriores pueden usar la ruta de actualización firmada de Sparkle.
 
 ### Requisitos
 

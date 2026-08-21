@@ -80,9 +80,9 @@ release build、`.app` bundle の生成、ad-hoc 署名、`~/Applications/QuotaB
 
 ### アップデート
 
-QuotaBar は起動時と6時間ごとに GitHub Releases を確認します。新しいバージョンがある場合は Monitor と Settings に release link を表示します。ユーザーが release を確認して DMG をインストールし、CLI の実行や実行ファイルの無断置換は行いません。
+QuotaBar は起動時と6時間ごとに GitHub Releases を確認します。v0.1.8 以降は Sparkle が署名済み HTTPS appcast と update archive を検証してから更新を提案します。更新には引き続きユーザーの承認が必要で、実行ファイルを無断で置き換えることはありません。
 
-現在の build は ad-hoc 署名のため、無人の自動置換は意図的に無効にしています。次の標準構成は Developer ID 署名、Apple notarization、HTTPS appcast、リポジトリ外で管理する Ed25519 key と Sparkle 2.9.6 です。
+v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。以降のバージョンでは署名済み Sparkle 更新を利用できます。
 
 ### 必要環境
 

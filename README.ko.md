@@ -80,9 +80,9 @@
 
 ### 업데이트
 
-QuotaBar는 앱 시작 시와 6시간마다 GitHub Releases를 확인합니다. 새 버전이 있으면 Monitor와 Settings에 release 링크를 보여줍니다. 사용자가 release를 확인하고 DMG를 설치하며, token·CLI·무인 실행 파일 교체는 하지 않습니다.
+QuotaBar는 실행 시와 6시간마다 GitHub Releases를 확인합니다. v0.1.8부터는 Sparkle이 서명된 HTTPS appcast와 update archive를 검증한 뒤 업데이트를 제안합니다. 업데이트는 여전히 사용자가 승인해야 하며, QuotaBar가 실행 파일을 조용히 교체하지 않습니다.
 
-현재 build는 ad-hoc 서명 상태라 무인 교체를 의도적으로 활성화하지 않았습니다. 정식 다음 단계는 Developer ID 서명, Apple notarization, HTTPS appcast, 저장소 외부 Ed25519 key와 Sparkle 2.9.6 구성입니다.
+v0.1.7은 Sparkle 도입 전 버전이므로 v0.1.7 사용자는 DMG로 v0.1.8을 한 번 수동 설치해야 합니다. 이후 버전부터 서명된 Sparkle 업데이트 경로를 사용할 수 있습니다.
 
 ### 요구사항
 

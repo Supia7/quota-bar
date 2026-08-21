@@ -15,12 +15,26 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.7</string>
+    <string>0.1.8</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
     <key>LSUIElement</key>
+    <true/>
+    <key>SUFeedURL</key>
+    <string>https://github.com/Supia7/quota-bar/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>x/7Ql67n9Bt3tA3josavzrROPWNX/zBYAe6usPc6PnI=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>21600</integer>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SURequireSignedFeed</key>
     <true/>
 </dict>
 </plist>

@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   package:
@@ -80,11 +80,13 @@ jobs:
         env:
           VERSION: ${{ github.ref_name }}
           ARCH: ${{ matrix.arch }}
+          BUILD_NUMBER: ${{ github.run_number }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
           SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -n "$NOTARY_KEY_BASE64" ]; then
             NOTARY_KEY_PATH="$RUNNER_TEMP/notary-authkey.p8"
@@ -113,13 +115,152 @@ jobs:
           path: artifacts/${{ matrix.arch }}
           if-no-files-found: error
 
+  universal:
+    name: Package universal Sparkle update
+    needs: package
+    runs-on: macos-26
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Download architecture artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          path: dist/by-arch
+          merge-multiple: false
+
+      - name: Verify signing and Sparkle secrets are present
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_ED25519_PRIVATE_KEY: ${{ secrets.SPARKLE_ED25519_PRIVATE_KEY }}
+        run: |
+          missing=0
+          for name in \
+            MACOS_CERT_P12_BASE64 \
+            MACOS_CERT_PASSWORD \
+            MACOS_SIGN_IDENTITY \
+            NOTARY_KEY_BASE64 \
+            NOTARY_KEY_ID \
+            NOTARY_ISSUER_ID \
+            APPLE_TEAM_ID \
+            SPARKLE_ED25519_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required release secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/quotabar-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" \
+            -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          rm -f "$CERT_PATH"
+
+      - name: Build universal signed update and appcast
+        env:
+          VERSION: ${{ github.ref_name }}
+          BUILD_NUMBER: ${{ github.run_number }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist/universal
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          SPARKLE_ED25519_PRIVATE_KEY: ${{ secrets.SPARKLE_ED25519_PRIVATE_KEY }}
+        run: |
+          set -e
+          ARM_ZIP="$(find dist/by-arch -name 'QuotaBar-macos-arm64.zip' -print -quit)"
+          X86_ZIP="$(find dist/by-arch -name 'QuotaBar-macos-x86_64.zip' -print -quit)"
+          test -n "$ARM_ZIP"
+          test -n "$X86_ZIP"
+          mkdir -p "$RUNNER_TEMP/extracted/arm64" "$RUNNER_TEMP/extracted/x86_64"
+          ditto -x -k "$ARM_ZIP" "$RUNNER_TEMP/extracted/arm64"
+          ditto -x -k "$X86_ZIP" "$RUNNER_TEMP/extracted/x86_64"
+
+          NOTARY_KEY_PATH="$RUNNER_TEMP/notary-authkey.p8"
+          echo "$NOTARY_KEY_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
+          export NOTARY_KEY_PATH
+          VERSION="${VERSION#v}" \
+            ARM64_APP="$RUNNER_TEMP/extracted/arm64/QuotaBar.app" \
+            X86_64_APP="$RUNNER_TEMP/extracted/x86_64/QuotaBar.app" \
+            OUTPUT_DIR="$GITHUB_WORKSPACE/dist/universal" \
+            ./Scripts/package-universal-app.sh
+
+          SPARKLE_ZIP="$RUNNER_TEMP/Sparkle-for-Swift-Package-Manager.zip"
+          curl --fail --silent --show-error --location \
+            https://github.com/sparkle-project/Sparkle/releases/download/2.9.6/Sparkle-for-Swift-Package-Manager.zip \
+            --output "$SPARKLE_ZIP"
+          printf '%s  %s\n' \
+            8d5fb41d960b43f4a68aa14126bf62b098544ec8d191cdcc73eb14e63a8e7606 \
+            "$SPARKLE_ZIP" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/sparkle-tools"
+          unzip -q "$SPARKLE_ZIP" -d "$RUNNER_TEMP/sparkle-tools"
+
+          mkdir -p "$RUNNER_TEMP/appcast-inputs"
+          cp "$GITHUB_WORKSPACE/dist/universal/QuotaBar-macos-universal.zip" \
+            "$RUNNER_TEMP/appcast-inputs/"
+          SPARKLE_GENERATE_APPCAST="$RUNNER_TEMP/sparkle-tools/bin/generate_appcast" \
+            SPARKLE_ED25519_PRIVATE_KEY="$SPARKLE_ED25519_PRIVATE_KEY" \
+            ./Scripts/generate-appcast.sh \
+              "$RUNNER_TEMP/appcast-inputs" \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/"
+          cp "$RUNNER_TEMP/appcast-inputs/appcast.xml" "$GITHUB_WORKSPACE/dist/universal/"
+          rm -f "$NOTARY_KEY_PATH" "$SPARKLE_ZIP"
+          mkdir -p artifacts/universal
+          cp dist/universal/QuotaBar-macos-universal.zip artifacts/universal/
+          cp dist/universal/QuotaBar-macos-universal.dmg artifacts/universal/
+          cp dist/universal/appcast.xml artifacts/universal/
+
+      - name: Clean up signing material
+        if: always()
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/quotabar-signing.keychain-db"
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f "$RUNNER_TEMP/notary-authkey.p8" "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/Sparkle-for-Swift-Package-Manager.zip"
+
+      - name: Upload universal artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quotabar-universal
+          path: artifacts/universal
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub release
-    needs: package
+    needs: [package, universal]
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
 
       - name: Download packaged artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -148,3 +289,46 @@ jobs:
               --title "QuotaBar ${TAG#v}" \
               --generate-notes
           fi
+
+  verify-published:
+    name: Verify published release artifacts
+    needs: publish
+    permissions:
+      contents: read
+    runs-on: macos-26
+    steps:
+      - name: Download published artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'QuotaBar-macos-*.zip' \
+            --pattern 'QuotaBar-macos-*.dmg' \
+            --pattern 'SHA256SUMS' \
+            --pattern 'appcast.xml' \
+            --dir dist
+
+      - name: Verify checksums and notarization
+        working-directory: dist
+        run: |
+          test -s appcast.xml
+          grep -q 'edSignature' appcast.xml
+          grep -q 'sparkle-signatures:' appcast.xml
+          grep -q 'QuotaBar-macos-universal.zip' appcast.xml
+          grep -q 'https://github.com/Supia7/quota-bar/releases/download/' appcast.xml
+          shasum -a 256 -c SHA256SUMS
+          for archive in QuotaBar-macos-*.zip; do
+            mkdir -p "verify-${archive%.zip}"
+            ditto -x -k "$archive" "verify-${archive%.zip}"
+            app="verify-${archive%.zip}/QuotaBar.app"
+            test -d "$app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            spctl --assess --type execute --verbose=4 "$app"
+            xcrun stapler validate "$app"
+          done
+          for image in QuotaBar-macos-*.dmg; do
+            xcrun stapler validate "$image"
+          done

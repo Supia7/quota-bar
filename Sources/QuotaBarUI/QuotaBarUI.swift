@@ -48,10 +48,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.7"
+        ) as? String ?? "0.1.8"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 7)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 8)
         let registry = (try? registryStore.load()) ?? AccountRegistry()
         configuredAccounts = registry.accounts
         if let provider {
@@ -238,19 +238,28 @@ public final class QuotaBarModel: ObservableObject {
 
 public struct QuotaMonitorView: View {
     @ObservedObject public var model: QuotaBarModel
+    private let updateAction: (@MainActor () -> Void)?
     @State private var editingAccount: QuotaAccount?
     @State private var isShowingSettings = false
 
-    public init(model: QuotaBarModel) {
+    public init(
+        model: QuotaBarModel,
+        updateAction: (@MainActor () -> Void)? = nil
+    ) {
         self.model = model
+        self.updateAction = updateAction
     }
 
     public var body: some View {
         Group {
             if isShowingSettings {
-                QuotaSettingsView(model: model) {
-                    isShowingSettings = false
-                }
+                QuotaSettingsView(
+                    model: model,
+                    onDone: {
+                        isShowingSettings = false
+                    },
+                    updateAction: updateAction
+                )
             } else {
                 monitorContent
             }
@@ -356,7 +365,14 @@ public struct QuotaMonitorView: View {
                 }
             }
             Spacer()
-            if let release = model.availableRelease {
+            if let updateAction {
+                Button(action: updateAction) {
+                    Label("Check for updates", systemImage: "arrow.down.circle")
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.borderless)
+                .foregroundStyle(.blue)
+            } else if let release = model.availableRelease {
                 Link(destination: release.pageURL) {
                     Label("Update \(release.version.description)", systemImage: "arrow.down.circle")
                 }
@@ -595,6 +611,7 @@ private struct AccountEditorView: View {
 public struct QuotaSettingsView: View {
     @ObservedObject public var model: QuotaBarModel
     private let onDone: (() -> Void)?
+    private let updateAction: (@MainActor () -> Void)?
     @State private var provider: QuotaProviderID = .claude
     @State private var alias = ""
     @State private var email = ""
@@ -617,10 +634,12 @@ public struct QuotaSettingsView: View {
 
     public init(
         model: QuotaBarModel,
-        onDone: (() -> Void)? = nil
+        onDone: (() -> Void)? = nil,
+        updateAction: (@MainActor () -> Void)? = nil
     ) {
         self.model = model
         self.onDone = onDone
+        self.updateAction = updateAction
         _credentialPath = State(
             initialValue: OAuthCredentialPathDiscovery.existingPath(for: .claude)
                 ?? OAuthCredentialPathDiscovery.defaultPath(for: .claude)
@@ -649,7 +668,11 @@ public struct QuotaSettingsView: View {
                             .font(.headline)
                         Spacer()
                         Button {
-                            Task { await model.checkForUpdates() }
+                            if let updateAction {
+                                updateAction()
+                            } else {
+                                Task { await model.checkForUpdates() }
+                            }
                         } label: {
                             Label("Check for updates", systemImage: "arrow.clockwise")
                         }
