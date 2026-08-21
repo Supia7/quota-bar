@@ -47,10 +47,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.2"
+        ) as? String ?? "0.1.5"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 2)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 5)
         let registry = (try? registryStore.load()) ?? AccountRegistry()
         configuredAccounts = registry.accounts
         if let provider {
@@ -569,8 +569,26 @@ public struct QuotaSettingsView: View {
     @State private var credentialPath = ""
     @State private var isImporterPresented = false
 
+    private var suggestedCredentialPath: String {
+        OAuthCredentialPathDiscovery.existingPath(for: provider)
+            ?? OAuthCredentialPathDiscovery.defaultPath(for: provider)
+    }
+
+    private var selectedCredentialPath: String {
+        let trimmed = credentialPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? suggestedCredentialPath : trimmed
+    }
+
+    private var credentialFileIsReadable: Bool {
+        FileManager.default.isReadableFile(atPath: selectedCredentialPath)
+    }
+
     public init(model: QuotaBarModel) {
         self.model = model
+        _credentialPath = State(
+            initialValue: OAuthCredentialPathDiscovery.existingPath(for: .claude)
+                ?? OAuthCredentialPathDiscovery.defaultPath(for: .claude)
+        )
     }
 
     public var body: some View {
@@ -663,15 +681,29 @@ public struct QuotaSettingsView: View {
                             Text(provider.displayName).tag(provider)
                         }
                     }
+                    .onChange(of: provider) { _, newProvider in
+                        credentialPath = OAuthCredentialPathDiscovery.existingPath(for: newProvider)
+                            ?? OAuthCredentialPathDiscovery.defaultPath(for: newProvider)
+                    }
                     TextField("Alias (optional)", text: $alias)
                         .textFieldStyle(.roundedBorder)
                     TextField("Email (display only)", text: $email)
                         .textFieldStyle(.roundedBorder)
-                    HStack {
-                        Text(credentialPath.isEmpty ? "No credential file selected" : credentialPath)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(selectedCredentialPath)
+                                .font(.caption)
+                                .foregroundStyle(credentialFileIsReadable ? Color.secondary : Color.orange)
+                                .lineLimit(1)
+                            Label(
+                                credentialFileIsReadable
+                                    ? "Credential detected automatically"
+                                    : "Credential file not found — choose JSON manually",
+                                systemImage: credentialFileIsReadable ? "checkmark.circle" : "exclamationmark.triangle"
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(credentialFileIsReadable ? Color.green : Color.orange)
+                        }
                         Spacer()
                         Button("Choose JSON…") {
                             isImporterPresented = true
@@ -683,14 +715,13 @@ public struct QuotaSettingsView: View {
                                 provider: provider,
                                 alias: alias,
                                 email: email,
-                                credentialPath: credentialPath
+                                credentialPath: selectedCredentialPath
                             )
                         )
                         alias = ""
                         email = ""
-                        credentialPath = ""
                     }
-                    .disabled(credentialPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!credentialFileIsReadable)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {

@@ -103,7 +103,12 @@ swift run QuotaBar
 
 ### 连接账号
 
-打开 Settings，选择 `Add OAuth account`，然后选择 provider 的 credential JSON 文件。
+打开 Settings 并选择 `Add OAuth account` 后，QuotaBar 会自动检测所选 provider 的标准 credential 路径。
+
+- Claude: `~/.claude/.credentials.json`
+- Codex: `~/.codex/auth.json`
+
+如果文件存在，无需手动选择 JSON 即可启用按钮。只有 credential 位于其他位置时才使用 `Choose JSON…`。
 
 | Provider | 默认 credential 文件 |
 | --- | --- |
