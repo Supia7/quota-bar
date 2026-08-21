@@ -24,16 +24,63 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERT_P12_BASE64" ]; then
+            echo "No signing certificate configured; falling back to ad-hoc signing."
+            exit 0
+          fi
+          KEYCHAIN_PATH="$RUNNER_TEMP/quotabar-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" \
+            -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          rm -f "$CERT_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
       - name: Build app bundle
         env:
           VERSION: ${{ github.ref_name }}
           ARCH: ${{ matrix.arch }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
         run: |
+          if [ -n "$NOTARY_KEY_BASE64" ]; then
+            NOTARY_KEY_PATH="$RUNNER_TEMP/notary-authkey.p8"
+            echo "$NOTARY_KEY_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
+            export NOTARY_KEY_PATH
+          fi
           VERSION="${VERSION#v}" ./Scripts/package-app.sh
+          rm -f "$RUNNER_TEMP/notary-authkey.p8"
           mkdir -p "artifacts/${ARCH}"
           cp "dist/QuotaBar-macos-${ARCH}.zip" "artifacts/${ARCH}/"
           cp "dist/QuotaBar-macos-${ARCH}.dmg" "artifacts/${ARCH}/"
+
+      - name: Clean up signing keychain
+        if: always()
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/quotabar-signing.keychain-db"
+          if [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f "$RUNNER_TEMP/notary-authkey.p8" "$RUNNER_TEMP/certificate.p12"
 
       - name: Upload architecture artifact
         uses: actions/upload-artifact@v4
