@@ -26,6 +26,7 @@ public final class QuotaBarModel: ObservableObject {
     }
 
     private static let viewModeDefaultsKey = "QuotaBar.viewMode"
+    public static let automaticRefreshInterval: Duration = .seconds(5 * 60)
     private var provider: any QuotaProvider
     private let registryStore: JSONAccountRegistryStore
     private let preferenceStore: JSONAccountDisplayPreferencesStore
@@ -47,10 +48,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.6"
+        ) as? String ?? "0.1.7"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 6)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 7)
         let registry = (try? registryStore.load()) ?? AccountRegistry()
         configuredAccounts = registry.accounts
         if let provider {
@@ -103,7 +104,7 @@ public final class QuotaBarModel: ObservableObject {
             while !Task.isCancelled {
                 await refresh()
                 do {
-                    try await Task.sleep(for: .seconds(180))
+                    try await Task.sleep(for: Self.automaticRefreshInterval)
                 } catch {
                     return
                 }

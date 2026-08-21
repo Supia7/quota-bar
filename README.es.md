@@ -127,7 +127,9 @@ QuotaBar solo guarda la ruta y las preferencias de visualización. No copia acce
 - No hay scraping de cookies de Claude Web
 - No se ejecutan CLI externos
 - No hay telemetry ni analytics
-- Si falla una actualización, se mantiene la última pantalla válida
+- Actualiza automáticamente cada cinco minutos
+- Refresh manual solicita un snapshot inmediato
+- Si falla la actualización, conserva la última pantalla conocida
 - Si el token caduca, se muestra un estado de reautenticación sin ejecutar un CLI en silencio
 
 > Los endpoints de uso OAuth de Claude y de suscripción de Codex no son APIs públicas estables. Si cambia el schema o el rate limit, QuotaBar muestra un error explícito y no una estimación.

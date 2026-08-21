@@ -81,6 +81,6 @@
 1. Add Keychain-backed credential reading where the provider stores credentials in Keychain instead of a readable JSON file.
 2. Add provider profile lookups so email can be discovered rather than manually entered; keep manual email as a fallback.
 3. Make live refresh best-effort per account so one expired account becomes a card-level re-auth state instead of failing the whole refresh.
-4. Add URLSession redirect/error fixture tests and a cooldown test for the 180-second polling policy.
+4. Add URLSession redirect/error fixture tests and a cooldown test for the 300-second polling policy.
 5. Select full Xcode and restore a native XCTest target in addition to the current framework-free checks.
 6. Add code signing/notarization and a reviewed release pipeline only after provider behavior is stable.

@@ -127,6 +127,8 @@ QuotaBar는 파일 경로와 표시 설정만 저장합니다. access token과 r
 - Claude Web cookie scraping 없음
 - 외부 CLI 실행 없음
 - telemetry와 analytics 없음
+- 5분마다 자동 refresh
+- 수동 Refresh는 즉시 snapshot 요청
 - refresh 실패 시 마지막으로 확인한 화면을 유지
 - token 만료 시 조용히 CLI를 실행하지 않고 재인증 필요 상태로 처리
 
