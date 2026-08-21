@@ -170,9 +170,18 @@ public enum CodexUsageDecoder {
     public static func decode(_ data: Data) throws -> [QuotaWindow] {
         guard
             let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let rateLimit = root["rate_limit"] as? [String: Any],
-            let secondary = rateLimit["secondary_window"] as? [String: Any],
-            let usedPercent = number(in: secondary, keys: ["used_percent", "utilization"])
+            let rateLimit = root["rate_limit"] as? [String: Any]
+        else {
+            throw UsageDecoderError.invalidPayload
+        }
+
+        // Codex has returned the weekly window as `secondary_window` in older
+        // responses and as `primary_window` in newer responses. Prefer the
+        // secondary window when present, then fall back to primary.
+        let window = (rateLimit["secondary_window"] as? [String: Any])
+            ?? (rateLimit["primary_window"] as? [String: Any])
+        guard let window,
+              let usedPercent = number(in: window, keys: ["used_percent", "utilization"])
         else {
             throw UsageDecoderError.invalidPayload
         }
@@ -183,7 +192,7 @@ public enum CodexUsageDecoder {
                 kind: .weekly,
                 title: "Weekly",
                 remainingFraction: 1 - usedPercent / 100,
-                resetAt: date(in: secondary, keys: ["reset_at", "resets_at"])
+                resetAt: date(in: window, keys: ["reset_at", "resets_at"])
             )
         ]
     }

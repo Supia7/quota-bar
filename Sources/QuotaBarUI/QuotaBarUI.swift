@@ -47,10 +47,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.5"
+        ) as? String ?? "0.1.6"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 5)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 6)
         let registry = (try? registryStore.load()) ?? AccountRegistry()
         configuredAccounts = registry.accounts
         if let provider {
@@ -238,12 +238,56 @@ public final class QuotaBarModel: ObservableObject {
 public struct QuotaMonitorView: View {
     @ObservedObject public var model: QuotaBarModel
     @State private var editingAccount: QuotaAccount?
+    @State private var isShowingSettings = false
 
     public init(model: QuotaBarModel) {
         self.model = model
     }
 
     public var body: some View {
+        Group {
+            if isShowingSettings {
+                QuotaSettingsView(model: model) {
+                    isShowingSettings = false
+                }
+            } else {
+                monitorContent
+            }
+        }
+        .padding(16)
+        .frame(
+            minWidth: 560,
+            idealWidth: 620,
+            maxWidth: 680,
+            minHeight: preferredHeight,
+            idealHeight: preferredHeight,
+            maxHeight: preferredHeight
+        )
+        .sheet(item: $editingAccount) { account in
+            AccountEditorView(account: account) { alias, isEmailHidden in
+                model.updateDisplay(
+                    for: account.id,
+                    alias: alias,
+                    isEmailHidden: isEmailHidden
+                )
+            }
+        }
+    }
+
+    private var preferredHeight: CGFloat {
+        if isShowingSettings {
+            return 620
+        }
+        guard !model.groups.isEmpty else {
+            return 240
+        }
+        let rowCount = model.groups.reduce(0) { $0 + $1.rows.count }
+        let groupSpacing = max(0, model.groups.count - 1) * 12
+        let estimated = 210 + CGFloat(rowCount * 78 + groupSpacing)
+        return min(max(estimated, 300), 680)
+    }
+
+    private var monitorContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             Picker("View", selection: $model.viewMode) {
@@ -267,6 +311,7 @@ public struct QuotaMonitorView: View {
                     systemImage: "chart.bar.xaxis",
                     description: Text("Connect an OAuth account to load usage.")
                 )
+                .frame(minHeight: 150)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 10) {
@@ -289,28 +334,11 @@ public struct QuotaMonitorView: View {
                     }
                 }
                 .scrollIndicators(.hidden)
+                .frame(maxHeight: 560)
             }
 
             Divider()
             footer
-        }
-        .padding(16)
-        .frame(
-            minWidth: 560,
-            idealWidth: 620,
-            maxWidth: 680,
-            minHeight: 620,
-            idealHeight: 720,
-            maxHeight: 820
-        )
-        .sheet(item: $editingAccount) { account in
-            AccountEditorView(account: account) { alias, isEmailHidden in
-                model.updateDisplay(
-                    for: account.id,
-                    alias: alias,
-                    isEmailHidden: isEmailHidden
-                )
-            }
         }
     }
 
@@ -334,11 +362,13 @@ public struct QuotaMonitorView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.blue)
             }
-            SettingsLink {
+            Button {
+                isShowingSettings = true
+            } label: {
                 Label("Settings", systemImage: "gearshape")
             }
             .buttonStyle(.borderless)
-            .help("Open QuotaBar settings")
+            .help("Show settings in this window")
             Button {
                 Task { await model.refresh() }
             } label: {
@@ -563,6 +593,7 @@ private struct AccountEditorView: View {
 
 public struct QuotaSettingsView: View {
     @ObservedObject public var model: QuotaBarModel
+    private let onDone: (() -> Void)?
     @State private var provider: QuotaProviderID = .claude
     @State private var alias = ""
     @State private var email = ""
@@ -583,8 +614,12 @@ public struct QuotaSettingsView: View {
         FileManager.default.isReadableFile(atPath: selectedCredentialPath)
     }
 
-    public init(model: QuotaBarModel) {
+    public init(
+        model: QuotaBarModel,
+        onDone: (() -> Void)? = nil
+    ) {
         self.model = model
+        self.onDone = onDone
         _credentialPath = State(
             initialValue: OAuthCredentialPathDiscovery.existingPath(for: .claude)
                 ?? OAuthCredentialPathDiscovery.defaultPath(for: .claude)
@@ -594,8 +629,16 @@ public struct QuotaSettingsView: View {
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("QuotaBar")
-                    .font(.title2.weight(.semibold))
+                HStack(spacing: 10) {
+                    if let onDone {
+                        Button(action: onDone) {
+                            Label("Back", systemImage: "chevron.left")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                    Text("Settings")
+                        .font(.title2.weight(.semibold))
+                }
                 Text("Claude and Codex OAuth subscriptions only.")
                     .foregroundStyle(.secondary)
 
@@ -734,7 +777,7 @@ public struct QuotaSettingsView: View {
             }
             .padding(28)
         }
-        .frame(width: 440, height: 620)
+        .frame(maxWidth: .infinity)
         .fileImporter(
             isPresented: $isImporterPresented,
             allowedContentTypes: [.json],
