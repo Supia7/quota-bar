@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "QuotaBar",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v26)
     ],
@@ -21,7 +22,8 @@ let package = Package(
         .target(name: "QuotaBarCore"),
         .target(
             name: "QuotaBarUI",
-            dependencies: ["QuotaBarCore"]
+            dependencies: ["QuotaBarCore"],
+            resources: [.process("Resources")]
         ),
         .executableTarget(
             name: "QuotaBar",

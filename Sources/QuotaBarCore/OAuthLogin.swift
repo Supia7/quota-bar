@@ -98,10 +98,41 @@ public enum OAuthAuthorizationConfiguration {
 public enum OAuthLoginError: Error, Equatable {
     case invalidAuthorizationURL
     case invalidCallback
+    case accessTokenNotAccepted
     case stateMismatch
     case tokenExchangeFailed
+    case tokenExchangeRejected(OAuthTokenExchangeReason)
     case invalidTokenResponse
     case unsupportedProvider
+}
+
+public enum OAuthTokenExchangeReason: Equatable, Sendable {
+    case invalidGrant
+    case invalidRequest
+    case redirectMismatch
+    case providerRejected
+    case unknown
+
+    public static func decode(_ data: Data) -> OAuthTokenExchangeReason {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return .unknown
+        }
+        let error = (object["error"] as? String)?.lowercased() ?? ""
+        let description = (object["error_description"] as? String)?.lowercased() ?? ""
+        if description.contains("redirect") || description.contains("redirect_uri") {
+            return .redirectMismatch
+        }
+        switch error {
+        case "invalid_grant":
+            return .invalidGrant
+        case "invalid_request":
+            return .invalidRequest
+        case "invalid_client", "unauthorized_client":
+            return .providerRejected
+        default:
+            return .unknown
+        }
+    }
 }
 
 public struct OAuthCallback: Equatable, Sendable {
@@ -113,6 +144,9 @@ public enum OAuthCallbackParser {
     public static func parse(_ input: String, expectedState: String) throws -> OAuthCallback {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw OAuthLoginError.invalidCallback }
+        if !trimmed.contains("://"), Self.looksLikeJWT(trimmed) {
+            throw OAuthLoginError.accessTokenNotAccepted
+        }
 
         let code: String
         let state: String
@@ -134,6 +168,18 @@ public enum OAuthCallbackParser {
         guard !code.isEmpty else { throw OAuthLoginError.invalidCallback }
         guard state == expectedState else { throw OAuthLoginError.stateMismatch }
         return OAuthCallback(code: code, state: state)
+    }
+
+    private static func looksLikeJWT(_ input: String) -> Bool {
+        let parts = input.split(separator: ".")
+        guard parts.count == 3, parts.allSatisfy({ !$0.isEmpty }) else { return false }
+        return parts.allSatisfy { part in
+            var encoded = String(part)
+                .replacingOccurrences(of: "-", with: "+")
+                .replacingOccurrences(of: "_", with: "/")
+            encoded += String(repeating: "=", count: (4 - encoded.count % 4) % 4)
+            return Data(base64Encoded: encoded) != nil
+        }
     }
 }
 

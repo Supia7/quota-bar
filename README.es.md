@@ -12,11 +12,15 @@ Compara varias cuentas por cuenta o por tipo de límite, y controla los alias y 
   <a href="https://github.com/Supia7/quota-bar"><img src="https://img.shields.io/badge/auth-OAuth%20only-6f42c1" alt="OAuth only"></a>
 </p>
 
+<p>
+  <img src="docs/images/quotabar-logo.png" width="96" alt="Logotipo de mascota de QuotaBar">
+</p>
+
 > **Estado:** Primera versión pública. Los endpoints de uso de Claude y Codex no son APIs públicas y estables de billing; son endpoints internos usados por sus coding clients. Si cambian, QuotaBar muestra un error explícito en lugar de inventar datos.
 
 ## Capturas
 
-> Estas capturas usan **datos de ejemplo** sin credenciales conectadas. No contienen tokens ni información real de cuentas.
+> Estas capturas usan el fixture explícito de `QuotaBarPreview`. Una instalación nueva muestra un estado vacío, nunca estas cuentas de ejemplo.
 
 <table>
   <tr>
@@ -50,6 +54,7 @@ Compara varias cuentas por cuenta o por tipo de límite, y controla los alias y 
 - Alias local editable
 - Mostrar u ocultar el correo por cuenta
 - Vistas `Accounts` y `Limit types`
+- Resumen de una línea por cuenta con detalles de cuota expandibles
 - La vista elegida se guarda localmente
 
 ## Instalación
@@ -82,13 +87,13 @@ Compila el binario release, crea el bundle `.app`, aplica una firma ad-hoc, lo c
 
 QuotaBar consulta GitHub Releases al iniciar y cada seis horas. Desde v0.1.8, Sparkle también verifica el appcast HTTPS firmado y el archivo de actualización antes de ofrecerla. La actualización sigue requiriendo la aprobación del usuario; QuotaBar nunca reemplaza silenciosamente el ejecutable.
 
-v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. v0.1.9 añade el inicio de sesión OAuth dentro de la app; las versiones posteriores pueden usar la ruta de actualización firmada de Sparkle.
+v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. v0.1.9 añadió el inicio de sesión OAuth dentro de la app; v0.1.10 añadió el guard de ubicación y el icono; v0.1.11 añade la UI compacta solo OAuth.
 
 ### Requisitos
 
 - macOS 26+
 - Swift 6.2+
-- JSON de credenciales OAuth gestionado por Claude Code o Codex
+- Inicio de sesión OAuth en navegador para Claude y Codex
 
 ### Compilar y ejecutar
 
@@ -103,21 +108,14 @@ swift run QuotaBar
 
 ### Conectar una cuenta
 
-Abre Settings y elige `Sign in with Claude` o `Sign in with Codex` para iniciar el OAuth en el navegador. Después de aprobarlo, pega en QuotaBar la callback URL o el authorization code. QuotaBar intercambia el code, verifica una respuesta real de quota y solo entonces guarda los access/refresh tokens en el Keychain de macOS.
-
-Si ya tienes una sesión iniciada en el CLI, puedes usar `Use existing credential file (fallback)`.
-
-- Claude: `~/.claude/.credentials.json`
-- Codex: `~/.codex/auth.json`
-
-Usa el JSON picker solo si las credenciales están en otra ubicación.
+Abre Settings y elige `Sign in with Claude` o `Sign in with Codex` para iniciar el OAuth en el navegador. Después de aprobarlo, pega en QuotaBar la callback URL completa o el authorization code de un solo uso. No pegues un access/refresh token. QuotaBar intercambia el code, verifica una respuesta real de quota y solo entonces guarda los access/refresh tokens en el Keychain de macOS.
 
 ## Límite de seguridad
 
 - Los nuevos tokens OAuth se guardan en el Keychain de macOS, no en `accounts.json`
-- El registro solo guarda provider, alias, email, source y metadata de deduplicación
+- El registro solo guarda provider, alias, email, source de Keychain y metadata de deduplicación
 - Las credenciales del Keychain se actualizan mediante el token endpoint del provider
-- Los archivos de credenciales del CLI siguen disponibles como fallback de compatibilidad
+- Los archivos JSON de credenciales del CLI no se importan
 - Solo OAuth; los datos de billing de una API key no se tratan como quota de suscripción
 - Los endpoints authorize, token y usage usan políticas HTTPS fijas
 - Los redirects HTTP se rechazan
@@ -135,7 +133,7 @@ Usa el JSON picker solo si las credenciales están en otra ubicación.
 
 | Ubicación | Contenido |
 | --- | --- |
-| `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, source, ruta del fallback de archivos y metadata de deduplicación |
+| `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, source de Keychain y metadata de deduplicación |
 | Keychain de macOS (`com.supia.quotabar.oauth`) | access/refresh tokens de OAuth dentro de la app |
 | `~/Library/Application Support/QuotaBar/display-preferences.json` | alias y visibilidad del email por cuenta |
 
@@ -145,7 +143,7 @@ Los access/refresh tokens de OAuth no se escriben en estos archivos.
 
 ```text
 Sources/QuotaBarCore/       modelos, decoders, credential boundary y provider client
-Sources/QuotaBarUI/         UI de menú, dos vistas, polling y editor de cuentas
+Sources/QuotaBarUI/         UI de menú, recursos para 5 idiomas, vista compacta, polling y editor de cuentas
 Sources/QuotaBar/            entrada de la aplicación de menú
 Sources/QuotaBarPreview/     entrada del Preview en ventana
 Sources/QuotaBarChecks/      self-check sin framework

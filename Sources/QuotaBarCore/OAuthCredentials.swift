@@ -30,48 +30,6 @@ public struct OAuthCredential: Equatable, Sendable {
     }
 }
 
-public enum OAuthCredentialFileDecoder {
-    public static func claude(_ data: Data) throws -> OAuthCredential {
-        guard
-            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let oauth = root["claudeAiOauth"] as? [String: Any],
-            let accessToken = oauth["accessToken"] as? String,
-            !accessToken.isEmpty
-        else {
-            throw UsageDecoderError.invalidPayload
-        }
-
-        return OAuthCredential(
-            accessToken: accessToken,
-            refreshToken: oauth["refreshToken"] as? String,
-            expiresAt: date(milliseconds: oauth["expiresAt"]),
-            subscriptionType: oauth["subscriptionType"] as? String
-        )
-    }
-
-    public static func codex(_ data: Data) throws -> OAuthCredential {
-        guard
-            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let tokens = root["tokens"] as? [String: Any],
-            let accessToken = tokens["access_token"] as? String,
-            !accessToken.isEmpty
-        else {
-            throw UsageDecoderError.invalidPayload
-        }
-
-        return OAuthCredential(
-            accessToken: accessToken,
-            refreshToken: tokens["refresh_token"] as? String,
-            accountID: tokens["account_id"] as? String
-        )
-    }
-
-    private static func date(milliseconds value: Any?) -> Date? {
-        guard let value = value as? NSNumber else { return nil }
-        return Date(timeIntervalSince1970: value.doubleValue / 1_000)
-    }
-}
-
 public enum OAuthCredentialSource: String, Codable, Sendable {
     case file
     case keychain
@@ -94,7 +52,7 @@ public struct OAuthAccountDescriptor: Identifiable, Codable, Equatable, Sendable
         email: String,
         isEmailHidden: Bool = false,
         credentialPath: String = "",
-        credentialSource: OAuthCredentialSource = .file,
+        credentialSource: OAuthCredentialSource = .keychain,
         credentialIdentity: String? = nil
     ) {
         self.id = id
@@ -140,7 +98,6 @@ public struct OAuthAccountDescriptor: Identifiable, Codable, Equatable, Sendable
         try container.encode(alias, forKey: .alias)
         try container.encode(email, forKey: .email)
         try container.encode(isEmailHidden, forKey: .isEmailHidden)
-        try container.encode(credentialPath, forKey: .credentialPath)
         try container.encode(credentialSource, forKey: .credentialSource)
         try container.encodeIfPresent(credentialIdentity, forKey: .credentialIdentity)
     }
@@ -150,11 +107,6 @@ public struct OAuthAccountDescriptor: Identifiable, Codable, Equatable, Sendable
         if let credentialIdentity, !credentialIdentity.isEmpty,
            let otherIdentity = other.credentialIdentity, !otherIdentity.isEmpty {
             return credentialIdentity.caseInsensitiveCompare(otherIdentity) == .orderedSame
-        }
-        if credentialSource == .file, other.credentialSource == .file {
-            let path = (credentialPath as NSString).expandingTildeInPath
-            let otherPath = (other.credentialPath as NSString).expandingTildeInPath
-            return !path.isEmpty && path == otherPath
         }
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let otherEmail = other.email.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -172,5 +124,9 @@ public struct AccountRegistry: Codable, Equatable, Sendable {
 
     public func containsEquivalentAccount(_ descriptor: OAuthAccountDescriptor) -> Bool {
         accounts.contains { $0.isEquivalent(to: descriptor) }
+    }
+
+    public var keychainOnly: AccountRegistry {
+        AccountRegistry(accounts: accounts.filter { $0.credentialSource == .keychain })
     }
 }

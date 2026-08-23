@@ -12,11 +12,15 @@
   <a href="https://github.com/Supia7/quota-bar"><img src="https://img.shields.io/badge/auth-OAuth%20only-6f42c1" alt="OAuth only"></a>
 </p>
 
+<p>
+  <img src="docs/images/quotabar-logo.png" width="96" alt="QuotaBar 吉祥物图标">
+</p>
+
 > **当前状态：** 初始公开版本。Claude 和 Codex 的使用量 endpoint 并不是稳定的公开 billing API，而是对应 coding client 使用的内部 endpoint。发生变化时，QuotaBar 会显示明确错误，而不会生成猜测值。
 
 ## 截图
 
-> 以下截图使用的是没有连接 credential 的**示例数据**，不包含真实 token 或账号信息。
+> 以下截图来自 `QuotaBarPreview` 专用 fixture。新安装的实际应用会显示空状态，而不是这些示例账号。
 
 <table>
   <tr>
@@ -50,6 +54,7 @@
 - 可编辑账号别名
 - 可按账号显示或隐藏 provider 邮箱
 - `Accounts` / `Limit types` 两种视图
+- 每个账号一行摘要，quota 详情可展开
 - 视图选择会保存在本地
 
 ## 安装方式
@@ -82,13 +87,13 @@ clone 仓库后运行下面一条命令。它会下载当前 Mac 架构对应的
 
 QuotaBar 会在启动时和每 6 小时检查 GitHub Releases。从 v0.1.8 开始，Sparkle 会先验证已签名的 HTTPS appcast 和更新压缩包，再提供更新。更新仍需要用户确认；QuotaBar 不会静默替换可执行文件。
 
-v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加了应用内 OAuth 登录；之后的版本可以使用已签名的 Sparkle 更新路径。
+v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加应用内 OAuth，v0.1.10 增加安装位置 guard 和图标，v0.1.11 增加 OAuth-only compact UI。
 
 ### 环境要求
 
 - macOS 26+
 - Swift 6.2+
-- 由 Claude Code 或 Codex 管理的 OAuth credential JSON
+- Claude 和 Codex 浏览器 OAuth 登录
 
 ### 构建和运行
 
@@ -103,21 +108,14 @@ swift run QuotaBar
 
 ### 连接账号
 
-打开 Settings，选择 `Sign in with Claude` 或 `Sign in with Codex`，即可在浏览器中开始 OAuth 登录。完成授权后，将 callback URL 或 authorization code 粘贴回 QuotaBar。QuotaBar 会交换 code，先验证一次真实 quota 响应，成功后才把 access / refresh token 保存到 macOS Keychain。
-
-已有 CLI 登录的用户可以使用 `Use existing credential file (fallback)`。
-
-- Claude：`~/.claude/.credentials.json`
-- Codex：`~/.codex/auth.json`
-
-只有 credential 位于其他位置时才需要 JSON picker。
+打开 Settings，选择 `Sign in with Claude` 或 `Sign in with Codex`，即可在浏览器中开始 OAuth 登录。完成授权后，将完整 callback URL 或一次性 authorization code 粘贴回 QuotaBar。不要粘贴 access / refresh token。QuotaBar 会交换 code，先验证一次真实 quota 响应，成功后才把 access / refresh token 保存到 macOS Keychain。
 
 ## 安全边界
 
 - 新 OAuth token 保存在 macOS Keychain，而不是 `accounts.json`
-- account registry 只保存 provider、alias、email、source 和去重 metadata
+- account registry 只保存 provider、alias、email、Keychain source 和去重 metadata
 - Keychain credential 通过 provider token endpoint 由应用自行 refresh
-- 已有 CLI credential file 作为兼容 fallback 保留
+- 不导入已有 CLI credential JSON 文件
 - 仅支持 OAuth，不把 API key billing 数据当作订阅 quota
 - authorize、token、usage endpoint 受固定 HTTPS 策略限制
 - 拒绝 HTTP redirect
@@ -135,7 +133,7 @@ swift run QuotaBar
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/Library/Application Support/QuotaBar/accounts.json` | provider、alias、email、source、file fallback path、去重 identity |
+| `~/Library/Application Support/QuotaBar/accounts.json` | provider、alias、email、Keychain source、去重 identity |
 | macOS Keychain (`com.supia.quotabar.oauth`) | 应用内 OAuth access / refresh token |
 | `~/Library/Application Support/QuotaBar/display-preferences.json` | 每个账号的 alias / email 显示设置 |
 
@@ -145,7 +143,7 @@ OAuth access / refresh token 不会写入这些文件。
 
 ```text
 Sources/QuotaBarCore/       模型、decoder、credential boundary、provider client
-Sources/QuotaBarUI/         菜单栏 UI、两种视图、polling、账号编辑器
+Sources/QuotaBarUI/         菜单栏 UI、5种语言资源、compact view、polling、账号编辑器
 Sources/QuotaBar/            菜单栏应用入口
 Sources/QuotaBarPreview/     普通窗口 Preview 入口
 Sources/QuotaBarChecks/      framework-free self-check

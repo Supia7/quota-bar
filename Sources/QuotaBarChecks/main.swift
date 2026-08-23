@@ -4,6 +4,56 @@ import QuotaBarCore
 @main
 enum QuotaBarChecks {
     static func main() async throws {
+        let emptyAccounts = try await EmptyQuotaProvider().snapshot(at: Date())
+        try check(emptyAccounts.isEmpty, "a fresh install must not expose sample quota accounts")
+
+        let mixedRegistry = AccountRegistry(accounts: [
+            OAuthAccountDescriptor(
+                provider: .claude,
+                alias: "Legacy file account",
+                email: "legacy@example.com",
+                credentialPath: "~/.claude/.credentials.json",
+                credentialSource: .file
+            ),
+            OAuthAccountDescriptor(
+                provider: .codex,
+                alias: "Keychain account",
+                email: "keychain@example.com",
+                credentialSource: .keychain,
+                credentialIdentity: "acct-keychain"
+            )
+        ])
+        try check(
+            mixedRegistry.keychainOnly.accounts.count == 1
+                && mixedRegistry.keychainOnly.accounts[0].credentialSource == OAuthCredentialSource.keychain,
+            "legacy file-backed accounts must be excluded from the active registry"
+        )
+
+        try check(QuotaWindowKind.fiveHour.compactLabel == "5h", "five-hour limits need a compact label")
+        try check(QuotaWindowKind.weekly.compactLabel == "W", "weekly limits need a compact label")
+        try check(QuotaWindowKind.fableWeekly.compactLabel == "F", "Fable limits need a compact label")
+
+        let invalidGrant = Data(#"{"error":"invalid_grant"}"#.utf8)
+        try check(
+            OAuthTokenExchangeReason.decode(invalidGrant) == .invalidGrant,
+            "invalid_grant must be surfaced as an actionable OAuth reason"
+        )
+        let redirectMismatch = Data(#"{"error":"invalid_request","error_description":"redirect_uri mismatch"}"#.utf8)
+        try check(
+            OAuthTokenExchangeReason.decode(redirectMismatch) == .redirectMismatch,
+            "redirect mismatch must be surfaced as an actionable OAuth reason"
+        )
+
+        do {
+            _ = try OAuthCallbackParser.parse(
+                "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJl",
+                expectedState: "state"
+            )
+            throw CheckFailure("access tokens must not be accepted as callback codes")
+        } catch OAuthLoginError.accessTokenNotAccepted {
+            // expected
+        }
+
         try check(
             QuotaWindow(
                 id: "over",
@@ -200,60 +250,6 @@ enum QuotaBarChecks {
             "GitHub release assets must expose the architecture DMG"
         )
 
-        let claudeCredentialData = try JSONSerialization.data(withJSONObject: [
-            "claudeAiOauth": [
-                "accessToken": "claude-access-token-fixture",
-                "refreshToken": "claude-refresh-token-fixture",
-                "expiresAt": 1_800_000_000_000,
-                "subscriptionType": "max"
-            ] as [String: Any]
-        ] as [String: Any])
-        let claudeCredential = try OAuthCredentialFileDecoder.claude(claudeCredentialData)
-        try check(
-            claudeCredential.accessToken == "claude-access-token-fixture",
-            "Claude OAuth access token must decode from provider credentials"
-        )
-        try check(
-            claudeCredential.refreshToken == "claude-refresh-token-fixture",
-            "Claude OAuth refresh token must decode from provider credentials"
-        )
-
-        let codexCredentialData = try JSONSerialization.data(withJSONObject: [
-            "tokens": [
-                "access_token": "codex-access-token-fixture",
-                "refresh_token": "codex-refresh-token-fixture",
-                "account_id": "acct_fixture"
-            ] as [String: Any]
-        ] as [String: Any])
-        let codexCredential = try OAuthCredentialFileDecoder.codex(codexCredentialData)
-        try check(
-            codexCredential.accessToken == "codex-access-token-fixture" && codexCredential.accountID == "acct_fixture",
-            "Codex OAuth credentials must decode from provider auth.json"
-        )
-
-        let discoveryHome = FileManager.default.temporaryDirectory
-            .appendingPathComponent("quotabar-home-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: discoveryHome, withIntermediateDirectories: true)
-        let discoveredCodexPath = discoveryHome.appendingPathComponent(".codex/auth.json")
-        try FileManager.default.createDirectory(
-            at: discoveredCodexPath.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        try codexCredentialData.write(to: discoveredCodexPath, options: .atomic)
-        try check(
-            OAuthCredentialPathDiscovery.defaultPath(for: .codex, homeDirectory: discoveryHome)
-                == discoveredCodexPath.path,
-            "Codex default credential path must be discovered"
-        )
-        try check(
-            OAuthCredentialPathDiscovery.existingPath(
-                for: .codex,
-                homeDirectory: discoveryHome
-            ) == discoveredCodexPath.path,
-            "Existing Codex credentials must be detected automatically"
-        )
-        try? FileManager.default.removeItem(at: discoveryHome)
-
         let registry = AccountRegistry(accounts: [
             OAuthAccountDescriptor(
                 id: UUID(uuidString: "00000000-0000-0000-0000-000000000010")!,
@@ -261,7 +257,8 @@ enum QuotaBarChecks {
                 alias: "Work Claude",
                 email: "work@example.com",
                 isEmailHidden: false,
-                credentialPath: "~/.claude/.credentials.json"
+                credentialSource: .keychain,
+                credentialIdentity: "acct-work"
             )
         ])
         let registryData = try JSONEncoder().encode(registry)
@@ -281,26 +278,12 @@ enum QuotaBarChecks {
             provider: .claude,
             alias: "Duplicate",
             email: "other@example.com",
-            credentialPath: "~/.claude/.credentials.json"
+            credentialSource: .keychain,
+            credentialIdentity: "acct-work"
         )
         try check(
             registry.containsEquivalentAccount(duplicateDescriptor),
-            "account registry must reject duplicate provider credential paths"
-        )
-        let legacyRegistryData = try JSONSerialization.data(withJSONObject: [
-            "accounts": [[
-                "id": "00000000-0000-0000-0000-000000000010",
-                "provider": "claude",
-                "alias": "Work Claude",
-                "email": "work@example.com",
-                "isEmailHidden": false,
-                "credentialPath": "~/.claude/.credentials.json"
-            ]]
-        ] as [String: Any])
-        let legacyRegistry = try JSONDecoder().decode(AccountRegistry.self, from: legacyRegistryData)
-        try check(
-            legacyRegistry.accounts.first?.credentialSource == .file,
-            "legacy file-backed registries must decode as file credentials"
+            "account registry must reject duplicate provider identities"
         )
         try? FileManager.default.removeItem(at: registryURL)
 
@@ -313,28 +296,34 @@ enum QuotaBarChecks {
         try check(loadedPreferences[account.id] == preference, "display preferences must round-trip to disk")
         try? FileManager.default.removeItem(at: preferenceURL)
 
-        let claudeCredentialPath = FileManager.default.temporaryDirectory
-            .appendingPathComponent("quotabar-claude-\(UUID().uuidString).json")
-        let codexCredentialPath = FileManager.default.temporaryDirectory
-            .appendingPathComponent("quotabar-codex-\(UUID().uuidString).json")
-        try claudeCredentialData.write(to: claudeCredentialPath, options: .atomic)
-        try codexCredentialData.write(to: codexCredentialPath, options: .atomic)
+        let liveClaudeID = UUID()
+        let liveCodexID = UUID()
+        let liveCredential = OAuthCredential(
+            accessToken: "live-access-fixture",
+            refreshToken: nil
+        )
+        let liveKeychainStore = KeychainOAuthCredentialStore()
+        try liveKeychainStore.save(liveCredential, for: liveClaudeID)
+        try liveKeychainStore.save(liveCredential, for: liveCodexID)
         let liveProvider = LiveOAuthQuotaProvider(
             accounts: [
                 OAuthAccountDescriptor(
+                    id: liveClaudeID,
                     provider: .claude,
                     alias: "Live Claude",
                     email: "live-claude@example.com",
-                    credentialPath: claudeCredentialPath.path
+                    credentialSource: .keychain,
+                    credentialIdentity: "live-claude"
                 ),
                 OAuthAccountDescriptor(
+                    id: liveCodexID,
                     provider: .codex,
                     alias: "Live Codex",
                     email: "live-codex@example.com",
-                    credentialPath: codexCredentialPath.path
+                    credentialSource: .keychain,
+                    credentialIdentity: "live-codex"
                 )
             ],
-            credentialLoader: FileOAuthCredentialLoader(),
             httpClient: FixtureOAuthHTTPClient(
                 responses: [
                     OAuthEndpointPolicy.claudeUsage.pathPrefix: claudeFixture,
@@ -347,8 +336,8 @@ enum QuotaBarChecks {
         )
         try check(liveAccounts.count == 2, "live provider must support multiple accounts without a cap")
         try check(liveAccounts.allSatisfy { !$0.isSampleData }, "live accounts must not be marked as sample data")
-        try? FileManager.default.removeItem(at: claudeCredentialPath)
-        try? FileManager.default.removeItem(at: codexCredentialPath)
+        try liveKeychainStore.delete(for: liveClaudeID)
+        try liveKeychainStore.delete(for: liveCodexID)
 
         let samples = try await SampleQuotaProvider().snapshot(
             at: Date(timeIntervalSince1970: 1_700_000_000)

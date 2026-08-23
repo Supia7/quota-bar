@@ -10,12 +10,11 @@ public struct LiveOAuthQuotaProvider: QuotaProvider, Sendable {
 
     public init(
         accounts: [OAuthAccountDescriptor],
-        credentialLoader: FileOAuthCredentialLoader = FileOAuthCredentialLoader(),
         httpClient: any OAuthUsageHTTPClient = URLSessionOAuthHTTPClient(),
         tokenService: OAuthTokenService = OAuthTokenService()
     ) {
         self.accounts = accounts
-        self.credentialResolver = OAuthCredentialResolver(fileLoader: credentialLoader)
+        self.credentialResolver = OAuthCredentialResolver()
         self.httpClient = httpClient
         self.tokenService = tokenService
     }
