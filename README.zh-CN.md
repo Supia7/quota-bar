@@ -24,12 +24,14 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/quotabar-accounts.png" alt="Claude 和 Codex 每个账号一行的紧凑账号视图"></td>
-    <td width="50%"><img src="docs/images/quotabar-limit-types.png" alt="按五小时、Weekly 和 Fable 限制分组的一行账号摘要"></td>
+    <td width="33%"><img src="docs/images/quotabar-accounts.png" alt="Claude 和 Codex 每个账号一行的紧凑账号视图"></td>
+    <td width="33%"><img src="docs/images/quotabar-limit-types.png" alt="按五小时、Weekly 和 Fable 限制分组的一行账号摘要"></td>
+    <td width="33%"><img src="docs/images/quotabar-settings.png" alt="显示浏览器 OAuth 登录和仅使用 Keychain 安全策略的设置视图"></td>
   </tr>
   <tr>
     <td align="center"><sub>紧凑账号视图</sub></td>
     <td align="center"><sub>紧凑限制类型视图</sub></td>
+    <td align="center"><sub>设置与 OAuth 视图</sub></td>
   </tr>
 </table>
 
@@ -87,7 +89,7 @@ clone 仓库后运行下面一条命令。它会下载当前 Mac 架构对应的
 
 QuotaBar 会在启动时和每 6 小时检查 GitHub Releases。从 v0.1.8 开始，Sparkle 会先验证已签名的 HTTPS appcast 和更新压缩包，再提供更新。更新仍需要用户确认；QuotaBar 不会静默替换可执行文件。
 
-v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加应用内 OAuth，v0.1.10 增加安装位置 guard 和图标，v0.1.12 增加 light/dark 卡片对比度和更新后的 compact UI 截图。
+v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加应用内 OAuth，v0.1.10 增加安装位置 guard 和图标，v0.1.13 增加 Settings/OAuth 截图和 OAuth 按钮对比度。
 
 ### 环境要求
 

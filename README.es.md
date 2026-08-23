@@ -24,12 +24,14 @@ Compara varias cuentas por cuenta o por tipo de límite, y controla los alias y 
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/quotabar-accounts.png" alt="Vista compacta con una fila por cuenta de Claude o Codex"></td>
-    <td width="50%"><img src="docs/images/quotabar-limit-types.png" alt="Vista compacta agrupada por límites de cinco horas, Weekly y Fable"></td>
+    <td width="33%"><img src="docs/images/quotabar-accounts.png" alt="Vista compacta con una fila por cuenta de Claude o Codex"></td>
+    <td width="33%"><img src="docs/images/quotabar-limit-types.png" alt="Vista compacta agrupada por límites de cinco horas, Weekly y Fable"></td>
+    <td width="33%"><img src="docs/images/quotabar-settings.png" alt="Vista de Settings con inicio de sesión OAuth en navegador y seguridad solo con Keychain"></td>
   </tr>
   <tr>
     <td align="center"><sub>Vista compacta por cuentas</sub></td>
     <td align="center"><sub>Vista compacta por tipo de límite</sub></td>
+    <td align="center"><sub>Vista de Settings y OAuth</sub></td>
   </tr>
 </table>
 
@@ -87,7 +89,7 @@ Compila el binario release, crea el bundle `.app`, aplica una firma ad-hoc, lo c
 
 QuotaBar consulta GitHub Releases al iniciar y cada seis horas. Desde v0.1.8, Sparkle también verifica el appcast HTTPS firmado y el archivo de actualización antes de ofrecerla. La actualización sigue requiriendo la aprobación del usuario; QuotaBar nunca reemplaza silenciosamente el ejecutable.
 
-v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. v0.1.9 añadió el inicio de sesión OAuth dentro de la app; v0.1.10 añadió el guard de ubicación y el icono; v0.1.12 añade contraste explícito para tarjetas claras/oscuras y capturas compactas actualizadas.
+v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. v0.1.9 añadió el inicio de sesión OAuth dentro de la app; v0.1.10 añadió el guard de ubicación y el icono; v0.1.13 añade la captura de Settings/OAuth y contraste explícito para los botones OAuth.
 
 ### Requisitos
 
