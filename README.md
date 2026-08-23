@@ -91,7 +91,7 @@ QuotaBar checks GitHub Releases when it launches and every six hours. Starting w
 
 If QuotaBar is opened directly from a DMG, Downloads, or another temporary/read-only location, it now stops before Sparkle and offers to copy itself to `~/Applications`. Sparkle can only replace an installed writable app bundle, so this avoids the macOS “can’t be updated because it was opened from a read-only or temporary location” dialog.
 
-v0.1.7 predates Sparkle, so users on v0.1.7 must install v0.1.8 once from the DMG. v0.1.9 added in-app OAuth sign-in; v0.1.10 added the install-location guard and app icon; v0.1.14 adds automatic Codex loopback callback completion.
+v0.1.7 predates Sparkle, so users on v0.1.7 must install v0.1.8 once from the DMG. v0.1.9 added in-app OAuth sign-in; v0.1.10 added the install-location guard and app icon; v0.1.14 adds automatic Codex loopback callback completion; v0.1.15 replaces SwiftUI MenuBarExtra with a stable AppKit status item and popover.
 
 ### Requirements
 
