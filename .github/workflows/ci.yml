@@ -32,4 +32,7 @@ jobs:
           bash -n Scripts/package-app.sh
           bash -n Scripts/install.sh
           bash -n Scripts/install-release.sh
+          bash -n Scripts/generate-app-icon.sh
+          test -f Resources/QuotaBar.icns
+          test "$(plutil -extract CFBundleIconFile raw -o - Resources/Info.plist)" = "QuotaBar"
           git diff --check

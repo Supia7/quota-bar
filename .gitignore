@@ -4,3 +4,4 @@
 *.xcworkspace
 build/
 dist/
+Resources/QuotaBar.iconset/

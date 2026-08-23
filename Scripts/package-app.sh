@@ -52,6 +52,11 @@ rm -rf "$APP_DIR" "$ZIP_PATH" "$DMG_PATH" "$CHECKSUM_PATH"
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$APP_DIR/Contents/Frameworks"
 cp "$BUILD_BIN" "$APP_DIR/Contents/MacOS/QuotaBar"
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
+if [[ ! -f "$ROOT_DIR/Resources/QuotaBar.icns" ]]; then
+  printf 'QuotaBar.icns is missing. Run Scripts/generate-app-icon.sh first.\n' >&2
+  exit 1
+fi
+cp "$ROOT_DIR/Resources/QuotaBar.icns" "$APP_DIR/Contents/Resources/QuotaBar.icns"
 chmod 755 "$APP_DIR/Contents/MacOS/QuotaBar"
 
 BUILD_BIN_DIR="$(dirname "$BUILD_BIN")"
