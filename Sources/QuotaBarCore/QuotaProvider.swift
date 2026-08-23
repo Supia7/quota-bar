@@ -6,6 +6,16 @@ public protocol QuotaProvider: Sendable {
     func snapshot(at date: Date) async throws -> [QuotaAccount]
 }
 
+public struct EmptyQuotaProvider: QuotaProvider {
+    public let id = "empty"
+
+    public init() {}
+
+    public func snapshot(at _: Date) async throws -> [QuotaAccount] {
+        []
+    }
+}
+
 public struct SampleQuotaProvider: QuotaProvider {
     public let id = "sample"
 

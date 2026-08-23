@@ -12,11 +12,15 @@
   <a href="https://github.com/Supia7/quota-bar"><img src="https://img.shields.io/badge/auth-OAuth%20only-6f42c1" alt="OAuth only"></a>
 </p>
 
+<p>
+  <img src="docs/images/quotabar-logo.png" width="96" alt="QuotaBar マスコットロゴ">
+</p>
+
 > **ステータス:** 初期公開版です。Claude と Codex の使用量 endpoint は安定した公開 billing API ではなく、各 coding client が利用する内部 endpoint です。変更時には推測値ではなく明示的なエラーを表示します。
 
 ## スクリーンショット
 
-> 以下は credential を接続していない **サンプルデータ**です。実際の token やアカウント情報は含まれていません。
+> 以下は `QuotaBarPreview` 専用 fixture の例です。実際のアプリを新規インストールすると、サンプルではなく空の状態が表示されます。
 
 <table>
   <tr>
@@ -50,6 +54,7 @@
 - ローカル alias の編集
 - アカウントごとのメール表示・非表示
 - `Accounts` / `Limit types` ビューの切り替え
+- アカウントごとの1行サマリーと展開可能な quota 詳細
 - 選択したビューはローカルに保存
 
 ## インストール方法
@@ -82,13 +87,13 @@ release build、`.app` bundle の生成、ad-hoc 署名、`~/Applications/QuotaB
 
 QuotaBar は起動時と6時間ごとに GitHub Releases を確認します。v0.1.8 以降は Sparkle が署名済み HTTPS appcast と update archive を検証してから更新を提案します。更新には引き続きユーザーの承認が必要で、実行ファイルを無断で置き換えることはありません。
 
-v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth ログインを追加し、以降のバージョンでは署名済み Sparkle 更新を利用できます。
+v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth、v0.1.10 ではインストール場所の guard とロゴ、v0.1.11 では OAuth 専用 compact UI を追加しました。
 
 ### 必要環境
 
 - macOS 26+
 - Swift 6.2+
-- Claude Code または Codex が管理する OAuth credential JSON
+- Claude と Codex のブラウザ OAuth ログイン
 
 ### ビルドと起動
 
@@ -103,21 +108,14 @@ swift run QuotaBar
 
 ### アカウントを接続
 
-Settings で `Sign in with Claude` または `Sign in with Codex` を選ぶと、ブラウザで OAuth ログインを開始します。承認後、callback URL または authorization code を QuotaBar に貼り付けます。QuotaBar は code を交換し、実際の quota 応答を1回検証してから access / refresh token を macOS Keychain に保存します。
-
-既存の CLI ログインを使う場合は `Use existing credential file (fallback)` を利用できます。
-
-- Claude: `~/.claude/.credentials.json`
-- Codex: `~/.codex/auth.json`
-
-別の場所に credential がある場合のみ JSON picker を使用してください。
+Settings で `Sign in with Claude` または `Sign in with Codex` を選ぶと、ブラウザで OAuth ログインを開始します。承認後、完全な callback URL または一度だけ使える authorization code を QuotaBar に貼り付けます。access / refresh token は貼り付けないでください。QuotaBar は code を交換し、実際の quota 応答を1回検証してから access / refresh token を macOS Keychain に保存します。
 
 ## セキュリティ境界
 
 - 新しい OAuth token は `accounts.json` ではなく macOS Keychain に保存
-- account registry には provider、alias、email、source、deduplication metadata のみ保存
+- account registry には provider、alias、email、Keychain source、deduplication metadata のみ保存
 - Keychain credential は provider token endpoint 経由でアプリが refresh
-- 既存の CLI credential file は互換用 fallback
+- 既存の CLI credential JSON はインポートしない
 - OAuth 専用 — API key の billing 情報をサブスクリプション quota として扱わない
 - authorize / token / usage endpoint は固定 HTTPS ポリシーで制限
 - HTTP redirect を拒否
@@ -135,7 +133,7 @@ Settings で `Sign in with Claude` または `Sign in with Codex` を選ぶと�
 
 | 場所 | 内容 |
 | --- | --- |
-| `~/Library/Application Support/QuotaBar/accounts.json` | provider、alias、email、source、file fallback path、deduplication identity |
+| `~/Library/Application Support/QuotaBar/accounts.json` | provider、alias、email、Keychain source、deduplication identity |
 | macOS Keychain (`com.supia.quotabar.oauth`) | アプリ内 OAuth の access / refresh token |
 | `~/Library/Application Support/QuotaBar/display-preferences.json` | アカウントごとの alias / email 表示設定 |
 
@@ -145,7 +143,7 @@ OAuth access / refresh token はこれらのファイルに保存しません。
 
 ```text
 Sources/QuotaBarCore/       モデル、decoder、credential boundary、provider client
-Sources/QuotaBarUI/         メニューバー UI、2つのビュー、polling、account editor
+Sources/QuotaBarUI/         メニューバー UI、5言語リソース、compact view、polling、account editor
 Sources/QuotaBar/            メニューバー app entry point
 Sources/QuotaBarPreview/     通常ウィンドウの Preview entry point
 Sources/QuotaBarChecks/      framework-free self-check

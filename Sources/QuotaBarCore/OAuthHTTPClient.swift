@@ -18,22 +18,6 @@ public enum OAuthNetworkError: Error, Equatable {
     case temporaryFailure
 }
 
-public struct FileOAuthCredentialLoader: Sendable {
-    public init() {}
-
-    public func load(_ descriptor: OAuthAccountDescriptor) throws -> OAuthCredential {
-        let expandedPath = (descriptor.credentialPath as NSString).expandingTildeInPath
-        let url = URL(fileURLWithPath: expandedPath)
-        let data = try Data(contentsOf: url)
-        switch descriptor.provider {
-        case .claude:
-            return try OAuthCredentialFileDecoder.claude(data)
-        case .codex:
-            return try OAuthCredentialFileDecoder.codex(data)
-        }
-    }
-}
-
 public struct URLSessionOAuthHTTPClient: OAuthUsageHTTPClient {
     public init() {}
 

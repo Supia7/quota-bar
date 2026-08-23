@@ -31,6 +31,17 @@ public enum QuotaWindowKind: String, CaseIterable, Codable, Identifiable, Sendab
             "Fable weekly"
         }
     }
+
+    public var compactLabel: String {
+        switch self {
+        case .fiveHour:
+            "5h"
+        case .weekly:
+            "W"
+        case .fableWeekly:
+            "F"
+        }
+    }
 }
 
 public struct QuotaWindow: Identifiable, Codable, Equatable, Sendable {

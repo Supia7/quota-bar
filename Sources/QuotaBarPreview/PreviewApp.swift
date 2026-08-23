@@ -1,9 +1,10 @@
+import QuotaBarCore
 import QuotaBarUI
 import SwiftUI
 
 @main
 struct QuotaBarPreviewApp: App {
-    @StateObject private var model = QuotaBarModel()
+    @StateObject private var model = QuotaBarModel(provider: SampleQuotaProvider())
 
     var body: some Scene {
         WindowGroup("QuotaBar Preview") {

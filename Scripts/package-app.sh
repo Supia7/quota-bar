@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${VERSION:-0.1.9}"
+VERSION="${VERSION:-0.1.11}"
 ARCH="${ARCH:-$(uname -m)}"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/dist}"
 BUILD_BIN="${BUILD_BIN:-}"
@@ -60,6 +60,12 @@ cp "$ROOT_DIR/Resources/QuotaBar.icns" "$APP_DIR/Contents/Resources/QuotaBar.icn
 chmod 755 "$APP_DIR/Contents/MacOS/QuotaBar"
 
 BUILD_BIN_DIR="$(dirname "$BUILD_BIN")"
+QUOTABAR_UI_RESOURCES="$BUILD_BIN_DIR/QuotaBar_QuotaBarUI.bundle"
+if [[ ! -d "$QUOTABAR_UI_RESOURCES" ]]; then
+  printf 'QuotaBarUI localization resources not found next to build binary: %s\n' "$QUOTABAR_UI_RESOURCES" >&2
+  exit 1
+fi
+ditto "$QUOTABAR_UI_RESOURCES" "$APP_DIR/Contents/Resources/QuotaBar_QuotaBarUI.bundle"
 SPARKLE_FRAMEWORK="$BUILD_BIN_DIR/Sparkle.framework"
 if [[ ! -d "$SPARKLE_FRAMEWORK" ]]; then
   printf 'Sparkle.framework not found next to build binary: %s\n' "$SPARKLE_FRAMEWORK" >&2

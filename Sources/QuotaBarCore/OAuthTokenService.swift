@@ -122,6 +122,11 @@ public struct OAuthTokenService: Sendable {
                 if response.statusCode == 401 || response.statusCode == 403 {
                     throw OAuthNetworkError.reauthenticationRequired
                 }
+                if response.statusCode == 400 {
+                    throw OAuthLoginError.tokenExchangeRejected(
+                        OAuthTokenExchangeReason.decode(data)
+                    )
+                }
                 throw OAuthLoginError.tokenExchangeFailed
             }
             return data

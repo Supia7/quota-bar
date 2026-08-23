@@ -2,7 +2,6 @@ import AppKit
 import Combine
 import QuotaBarCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 public enum QuotaBarAccountMutationError: Error, Equatable {
     case duplicateAccount
@@ -55,16 +54,20 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.9"
+        ) as? String ?? "0.1.11"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 9)
-        let registry = (try? registryStore.load()) ?? AccountRegistry()
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 11)
+        let loadedRegistry = (try? registryStore.load()) ?? AccountRegistry()
+        let registry = loadedRegistry.keychainOnly
+        if registry != loadedRegistry {
+            try? registryStore.save(registry)
+        }
         configuredAccounts = registry.accounts
         if let provider {
             self.provider = provider
         } else if registry.accounts.isEmpty {
-            self.provider = SampleQuotaProvider()
+            self.provider = EmptyQuotaProvider()
         } else {
             self.provider = LiveOAuthQuotaProvider(accounts: registry.accounts)
         }
@@ -169,28 +172,14 @@ public final class QuotaBarModel: ObservableObject {
         accounts.first(where: { $0.id == id })
     }
 
-    public func addAccount(_ descriptor: OAuthAccountDescriptor) {
-        guard !AccountRegistry(accounts: configuredAccounts).containsEquivalentAccount(descriptor) else {
-            errorMessage = "This OAuth account is already connected."
-            return
-        }
-        configuredAccounts.append(descriptor)
-        saveRegistry()
-        provider = LiveOAuthQuotaProvider(accounts: configuredAccounts)
-        Task { await refresh() }
-    }
-
     public func addKeychainAccount(
         provider providerID: QuotaProviderID,
-        credential: OAuthCredential,
-        alias: String,
-        email: String
+        credential: OAuthCredential
     ) async throws {
-        let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedEmail = normalizedEmail.isEmpty ? (credential.email ?? "") : normalizedEmail
+        let resolvedEmail = credential.email ?? ""
         let descriptor = OAuthAccountDescriptor(
             provider: providerID,
-            alias: alias.trimmingCharacters(in: .whitespacesAndNewlines),
+            alias: "",
             email: resolvedEmail,
             credentialSource: .keychain,
             credentialIdentity: credential.accountID
@@ -222,7 +211,7 @@ public final class QuotaBarModel: ObservableObject {
         configuredAccounts.removeAll { $0.id == id }
         saveRegistry()
         provider = configuredAccounts.isEmpty
-            ? SampleQuotaProvider()
+            ? EmptyQuotaProvider()
             : LiveOAuthQuotaProvider(accounts: configuredAccounts)
         Task { await refresh() }
     }
@@ -276,11 +265,11 @@ public final class QuotaBarModel: ObservableObject {
     private func message(for error: Error) -> String {
         switch error {
         case OAuthNetworkError.reauthenticationRequired:
-            "Re-authentication required for one or more accounts."
+            L10n.string("error.refresh_reauth")
         case OAuthNetworkError.rateLimited:
-            "Provider rate limited the refresh. Keeping the last data."
+            L10n.string("error.refresh_rate_limited")
         default:
-            "Refresh failed. Keeping the last data."
+            L10n.string("error.refresh_generic")
         }
     }
 }
@@ -340,18 +329,20 @@ public struct QuotaMonitorView: View {
         guard !model.groups.isEmpty else {
             return 240
         }
-        let rowCount = model.groups.reduce(0) { $0 + $1.rows.count }
+        let rowCount = model.viewMode == .account
+            ? model.accounts.count
+            : model.groups.reduce(0) { $0 + $1.rows.count }
         let groupSpacing = max(0, model.groups.count - 1) * 12
-        let estimated = 210 + CGFloat(rowCount * 78 + groupSpacing)
-        return min(max(estimated, 300), 680)
+        let estimated = 185 + CGFloat(rowCount * 56 + groupSpacing)
+        return min(max(estimated, 260), 560)
     }
 
     private var monitorContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
-            Picker("View", selection: $model.viewMode) {
+            Picker(L10n.string("monitor.view"), selection: $model.viewMode) {
                 ForEach(UsageViewMode.allCases, id: \.self) { mode in
-                    Text(mode.title).tag(mode)
+                    Text(L10n.viewTitle(mode)).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
@@ -366,9 +357,9 @@ public struct QuotaMonitorView: View {
 
             if model.groups.isEmpty {
                 ContentUnavailableView(
-                    "No quota data",
+                    L10n.string("monitor.no_data_title"),
                     systemImage: "chart.bar.xaxis",
-                    description: Text("Connect an OAuth account to load usage.")
+                    description: Text(L10n.string("monitor.no_data_description"))
                 )
                 .frame(minHeight: 150)
             } else {
@@ -404,10 +395,10 @@ public struct QuotaMonitorView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("QuotaBar")
+                Text(L10n.string("app.name"))
                     .font(.title2.weight(.semibold))
                 if model.isSampleData {
-                    Text("SAMPLE DATA")
+                    Text(L10n.string("monitor.sample_data"))
                         .font(.caption2.weight(.bold))
                         .tracking(1.1)
                         .foregroundStyle(.orange)
@@ -416,14 +407,14 @@ public struct QuotaMonitorView: View {
             Spacer()
             if let updateAction {
                 Button(action: updateAction) {
-                    Label("Check for updates", systemImage: "arrow.down.circle")
+                    Label(L10n.string("update.check"), systemImage: "arrow.down.circle")
                 }
                 .font(.caption.weight(.semibold))
                 .buttonStyle(.borderless)
                 .foregroundStyle(.blue)
             } else if let release = model.availableRelease {
                 Link(destination: release.pageURL) {
-                    Label("Update \(release.version.description)", systemImage: "arrow.down.circle")
+                    Label(L10n.updateAvailable(release.version.description), systemImage: "arrow.down.circle")
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.blue)
@@ -431,17 +422,17 @@ public struct QuotaMonitorView: View {
             Button {
                 isShowingSettings = true
             } label: {
-                Label("Settings", systemImage: "gearshape")
+                Label(L10n.string("settings.title"), systemImage: "gearshape")
             }
             .buttonStyle(.borderless)
-            .help("Show settings in this window")
+            .help(L10n.string("settings.title"))
             Button {
                 Task { await model.refresh() }
             } label: {
                 Image(systemName: model.isRefreshing ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
             }
             .buttonStyle(.borderless)
-            .help("Refresh quota data")
+            .help(L10n.string("monitor.refresh"))
             .disabled(model.isRefreshing)
         }
     }
@@ -449,12 +440,13 @@ public struct QuotaMonitorView: View {
     private var footer: some View {
         HStack {
             if let lastUpdated = model.lastUpdated {
-                Text("Updated \(lastUpdated, style: .relative)")
+                Text(L10n.string("monitor.updated"))
+                Text(lastUpdated, style: .relative)
             } else {
-                Text("Not updated yet")
+                Text(L10n.string("monitor.not_updated"))
             }
             Spacer()
-            Text("OAuth only")
+            Text(L10n.string("monitor.oauth_only"))
         }
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -465,6 +457,7 @@ private struct AccountQuotaCard: View {
     let account: QuotaAccount
     let rows: [QuotaGroupRow]
     let onEdit: () -> Void
+    @State private var isExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -472,40 +465,71 @@ private struct AccountQuotaCard: View {
                 Circle()
                     .fill(account.provider.tint)
                     .frame(width: 8, height: 8)
-                Text(account.provider.displayName)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(account.displayName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    if let email = account.visibleEmail {
+                        Text("· \(email)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
                 Spacer()
+                HStack(spacing: 5) {
+                    ForEach(rows) { row in
+                        CompactQuotaBadge(window: row.window, tint: account.provider.tint)
+                    }
+                }
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                }
+                .buttonStyle(.borderless)
+                .help(L10n.string("account.toggle_details"))
                 Button(action: onEdit) {
                     Image(systemName: "ellipsis.circle")
                 }
                 .buttonStyle(.borderless)
-                .help("Edit alias and email visibility")
+                .help(L10n.string("account.edit"))
             }
 
-            HStack(alignment: .firstTextBaseline) {
-                Text(account.displayName)
-                    .font(.headline)
-                Spacer()
-                if let email = account.visibleEmail {
-                    Text(email)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                } else {
-                    Image(systemName: "eye.slash")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .help("Email hidden")
+            if isExpanded {
+                Divider()
+                ForEach(rows) { row in
+                    QuotaWindowRow(window: row.window, tint: account.provider.tint)
                 }
-            }
-
-            ForEach(rows) { row in
-                QuotaWindowRow(window: row.window, tint: account.provider.tint)
             }
         }
         .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct CompactQuotaBadge: View {
+    let window: QuotaWindow
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(window.kind.compactLabel)
+                .font(.caption2.weight(.semibold))
+            if let percentage = window.remainingPercentage {
+                Text("\(percentage)%")
+                    .font(.caption2.monospacedDigit().weight(.semibold))
+            } else {
+                Text("—")
+                    .font(.caption2.weight(.semibold))
+            }
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(tint.opacity(0.12), in: Capsule())
     }
 }
 
@@ -516,10 +540,10 @@ private struct LimitTypeCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(group.title)
+                Text(L10n.windowTitle(group.kind ?? .weekly))
                     .font(.headline)
                 Spacer()
-                Text("\(group.rows.count) accounts")
+                Text(L10n.accountCount(group.rows.count))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -529,17 +553,19 @@ private struct LimitTypeCard: View {
                     Circle()
                         .fill(row.provider.tint)
                         .frame(width: 7, height: 7)
-                    VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
                         Text(row.accountName)
                             .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
                         if let email = row.visibleEmail {
-                            Text(email)
+                            Text("· \(email)")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
                     }
                     Spacer()
-                    QuotaWindowValue(window: row.window, tint: row.provider.tint)
+                    CompactQuotaBadge(window: row.window, tint: row.provider.tint)
                     Button {
                         onEdit(row.accountID)
                     } label: {
@@ -561,7 +587,7 @@ private struct QuotaWindowRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
-                Text(window.title)
+                Text(L10n.windowTitle(window.kind))
                     .font(.subheadline)
                 Spacer()
                 QuotaWindowValue(window: window, tint: tint)
@@ -577,12 +603,15 @@ private struct QuotaWindowRow: View {
             }
 
             HStack {
-                Text(window.remainingFraction == nil ? "unavailable" : "remaining")
+                Text(window.remainingFraction == nil
+                    ? L10n.string("quota.unavailable")
+                    : L10n.string("quota.remaining"))
                 Spacer()
                 if let resetAt = window.resetAt {
-                    Text("resets \(resetAt, style: .relative)")
+                    Text(L10n.string("quota.resets"))
+                    Text(resetAt, style: .relative)
                 } else {
-                    Text("reset unavailable")
+                    Text(L10n.string("quota.reset_unavailable"))
                 }
             }
             .font(.caption2)
@@ -601,7 +630,7 @@ private struct QuotaWindowValue: View {
                 .font(.subheadline.monospacedDigit().weight(.semibold))
                 .foregroundStyle(tint)
         } else {
-            Text("Unavailable")
+            Text(L10n.string("quota.unavailable"))
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
         }
@@ -624,28 +653,28 @@ private struct AccountEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Edit account")
+            Text(L10n.string("account.edit"))
                 .font(.title3.weight(.semibold))
-            LabeledContent("Provider", value: account.provider.displayName)
+            LabeledContent(L10n.string("account.provider"), value: account.provider.displayName)
             VStack(alignment: .leading, spacing: 6) {
-                Text("Alias")
+                Text(L10n.string("account.alias"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                TextField("Optional alias", text: $alias)
+                TextField(L10n.string("account.alias_placeholder"), text: $alias)
                     .textFieldStyle(.roundedBorder)
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("Email")
+                Text(L10n.string("account.email"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Text(account.email.isEmpty ? "Not provided" : account.email)
+                Text(account.email.isEmpty ? L10n.string("account.not_provided") : account.email)
                     .foregroundStyle(.secondary)
             }
-            Toggle("Hide email in QuotaBar", isOn: $isEmailHidden)
+            Toggle(L10n.string("account.hide_email"), isOn: $isEmailHidden)
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
+                Button(L10n.string("common.cancel")) { dismiss() }
+                Button(L10n.string("common.save")) {
                     onSave(alias, isEmailHidden)
                     dismiss()
                 }
@@ -661,29 +690,10 @@ public struct QuotaSettingsView: View {
     @ObservedObject public var model: QuotaBarModel
     private let onDone: (() -> Void)?
     private let updateAction: (@MainActor () -> Void)?
-    @State private var provider: QuotaProviderID = .claude
-    @State private var alias = ""
-    @State private var email = ""
-    @State private var credentialPath = ""
-    @State private var isImporterPresented = false
     @State private var oauthRequest: OAuthAuthorizationRequest?
     @State private var callbackInput = ""
     @State private var isCompletingOAuth = false
     @State private var oauthError: String?
-
-    private var suggestedCredentialPath: String {
-        OAuthCredentialPathDiscovery.existingPath(for: provider)
-            ?? OAuthCredentialPathDiscovery.defaultPath(for: provider)
-    }
-
-    private var selectedCredentialPath: String {
-        let trimmed = credentialPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? suggestedCredentialPath : trimmed
-    }
-
-    private var credentialFileIsReadable: Bool {
-        FileManager.default.isReadableFile(atPath: selectedCredentialPath)
-    }
 
     public init(
         model: QuotaBarModel,
@@ -693,25 +703,21 @@ public struct QuotaSettingsView: View {
         self.model = model
         self.onDone = onDone
         self.updateAction = updateAction
-        _credentialPath = State(
-            initialValue: OAuthCredentialPathDiscovery.existingPath(for: .claude)
-                ?? OAuthCredentialPathDiscovery.defaultPath(for: .claude)
-        )
     }
 
     private var inAppOAuthSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Sign in to QuotaBar")
+            Text(L10n.string("settings.sign_in_title"))
                 .font(.headline)
-            Text("Open the provider login in your browser once. QuotaBar stores the resulting OAuth tokens in the macOS Keychain and refreshes them itself.")
+            Text(L10n.string("settings.sign_in_description"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
-                Button("Sign in with Claude") {
+                Button(L10n.string("provider.sign_in_claude")) {
                     startOAuthLogin(for: .claude)
                 }
                 .buttonStyle(.borderedProminent)
-                Button("Sign in with Codex") {
+                Button(L10n.string("provider.sign_in_codex")) {
                     startOAuthLogin(for: .codex)
                 }
                 .buttonStyle(.borderedProminent)
@@ -719,16 +725,24 @@ public struct QuotaSettingsView: View {
 
             if let oauthRequest {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Finish sign-in in your browser, then paste the callback URL or code here.")
+                    Text(L10n.string("oauth.callback_instruction"))
                         .font(.caption)
-                    TextField("Callback URL or authorization code", text: $callbackInput)
-                        .textFieldStyle(.roundedBorder)
+                    Text(L10n.string("oauth.callback_warning"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    TextField(
+                        L10n.string("oauth.callback_placeholder"),
+                        text: $callbackInput
+                    )
+                    .textFieldStyle(.roundedBorder)
                     HStack {
-                        Button(isCompletingOAuth ? "Completing…" : "Complete sign-in") {
+                        Button(isCompletingOAuth
+                            ? L10n.string("oauth.completing")
+                            : L10n.string("oauth.complete")) {
                             Task { await completeOAuthLogin(oauthRequest) }
                         }
                         .disabled(isCompletingOAuth || callbackInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        Button("Cancel") {
+                        Button(L10n.string("common.cancel")) {
                             self.oauthRequest = nil
                             callbackInput = ""
                             oauthError = nil
@@ -753,21 +767,21 @@ public struct QuotaSettingsView: View {
                 HStack(spacing: 10) {
                     if let onDone {
                         Button(action: onDone) {
-                            Label("Back", systemImage: "chevron.left")
+                            Label(L10n.string("common.back"), systemImage: "chevron.left")
                         }
                         .buttonStyle(.borderless)
                     }
-                    Text("Settings")
+                    Text(L10n.string("settings.title"))
                         .font(.title2.weight(.semibold))
                 }
-                Text("Claude and Codex OAuth subscriptions only.")
+                Text(L10n.string("settings.subtitle"))
                     .foregroundStyle(.secondary)
 
                 inAppOAuthSection
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Updates")
+                        Text(L10n.string("update.title"))
                             .font(.headline)
                         Spacer()
                         Button {
@@ -777,7 +791,7 @@ public struct QuotaSettingsView: View {
                                 Task { await model.checkForUpdates() }
                             }
                         } label: {
-                            Label("Check for updates", systemImage: "arrow.clockwise")
+                            Label(L10n.string("update.check"), systemImage: "arrow.clockwise")
                         }
                         .buttonStyle(.borderless)
                         .disabled({
@@ -787,30 +801,30 @@ public struct QuotaSettingsView: View {
                     }
                     if case let .available(release) = model.updateState {
                         Link(
-                            "QuotaBar \(release.version.description) is available — open release",
+                            L10n.updateAvailable(release.version.description),
                             destination: release.pageURL
                         )
                         .foregroundStyle(.blue)
                     } else if case let .upToDate(version) = model.updateState {
-                        Text("You are up to date (\(version)).")
+                        Text(L10n.updateUpToDate(version))
                             .foregroundStyle(.secondary)
                     } else if case .checking = model.updateState {
-                        Text("Checking GitHub Releases…")
+                        Text(L10n.string("update.checking"))
                             .foregroundStyle(.secondary)
                     } else if case .failed = model.updateState {
-                        Text("Could not check GitHub Releases right now.")
+                        Text(L10n.string("update.failed"))
                             .foregroundStyle(.orange)
                     } else {
-                        Text("Checks on launch and every 6 hours.")
+                        Text(L10n.string("update.schedule"))
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Connected accounts")
+                    Text(L10n.string("settings.connected_accounts"))
                         .font(.headline)
                     if model.configuredAccounts.isEmpty {
-                        Text("No OAuth accounts configured. Sample data is shown in the monitor.")
+                        Text(L10n.string("settings.no_accounts"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -823,9 +837,7 @@ public struct QuotaSettingsView: View {
                                     Text(account.alias.isEmpty ? account.email : account.alias)
                                         .font(.subheadline.weight(.medium))
                                     Text(account.email.isEmpty
-                                        ? (account.credentialSource == .keychain
-                                            ? "OAuth token in macOS Keychain"
-                                            : account.credentialPath)
+                                        ? L10n.string("settings.keychain_account")
                                         : account.email)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
@@ -838,7 +850,7 @@ public struct QuotaSettingsView: View {
                                     Image(systemName: "trash")
                                 }
                                 .buttonStyle(.borderless)
-                                .help("Remove account")
+                                .help(L10n.string("account.remove"))
                             }
                             .padding(.vertical, 4)
                         }
@@ -847,61 +859,10 @@ public struct QuotaSettingsView: View {
 
                 Divider()
 
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Use existing credential file (fallback)")
-                        .font(.headline)
-                    Picker("Provider", selection: $provider) {
-                        ForEach(QuotaProviderID.allCases, id: \.self) { provider in
-                            Text(provider.displayName).tag(provider)
-                        }
-                    }
-                    .onChange(of: provider) { _, newProvider in
-                        credentialPath = OAuthCredentialPathDiscovery.existingPath(for: newProvider)
-                            ?? OAuthCredentialPathDiscovery.defaultPath(for: newProvider)
-                    }
-                    TextField("Alias (optional)", text: $alias)
-                        .textFieldStyle(.roundedBorder)
-                    TextField("Email (display only)", text: $email)
-                        .textFieldStyle(.roundedBorder)
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(selectedCredentialPath)
-                                .font(.caption)
-                                .foregroundStyle(credentialFileIsReadable ? Color.secondary : Color.orange)
-                                .lineLimit(1)
-                            Label(
-                                credentialFileIsReadable
-                                    ? "Credential detected automatically"
-                                    : "Credential file not found — choose JSON manually",
-                                systemImage: credentialFileIsReadable ? "checkmark.circle" : "exclamationmark.triangle"
-                            )
-                            .font(.caption2)
-                            .foregroundStyle(credentialFileIsReadable ? Color.green : Color.orange)
-                        }
-                        Spacer()
-                        Button("Choose JSON…") {
-                            isImporterPresented = true
-                        }
-                    }
-                    Button("Add file-backed account") {
-                        model.addAccount(
-                            OAuthAccountDescriptor(
-                                provider: provider,
-                                alias: alias,
-                                email: email,
-                                credentialPath: selectedCredentialPath
-                            )
-                        )
-                        alias = ""
-                        email = ""
-                    }
-                    .disabled(!credentialFileIsReadable)
-                }
-
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("New sign-ins are stored in the macOS Keychain", systemImage: "key.fill")
-                    Label("Existing credential files remain available as a fallback", systemImage: "doc.badge.gearshape")
-                    Label("Only fixed HTTPS provider endpoints are called", systemImage: "lock.shield")
+                    Label(L10n.string("settings.keychain_only"), systemImage: "key.fill")
+                    Label(L10n.string("settings.no_file_fallback"), systemImage: "doc.badge.minus")
+                    Label(L10n.string("settings.fixed_endpoints"), systemImage: "lock.shield")
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -909,16 +870,6 @@ public struct QuotaSettingsView: View {
             .padding(28)
         }
         .frame(maxWidth: .infinity)
-        .fileImporter(
-            isPresented: $isImporterPresented,
-            allowedContentTypes: [.json],
-            allowsMultipleSelection: false
-        ) { result in
-            if case let .success(urls) = result,
-               let url = urls.first {
-                credentialPath = url.path
-            }
-        }
     }
 
     private func startOAuthLogin(for provider: QuotaProviderID) {
@@ -929,7 +880,7 @@ public struct QuotaSettingsView: View {
             oauthError = nil
             NSWorkspace.shared.open(request.url)
         } catch {
-            oauthError = "Could not start browser login."
+            oauthError = L10n.string("error.browser_login_failed")
         }
     }
 
@@ -948,28 +899,43 @@ public struct QuotaSettingsView: View {
             )
             try await model.addKeychainAccount(
                 provider: request.provider,
-                credential: credential,
-                alias: alias,
-                email: email
+                credential: credential
             )
             oauthRequest = nil
             callbackInput = ""
-            alias = ""
-            email = ""
         } catch QuotaBarAccountMutationError.duplicateAccount {
-            oauthError = "This OAuth account is already connected."
+            oauthError = L10n.string("error.duplicate")
         } catch QuotaBarAccountMutationError.usageValidationFailed {
-            oauthError = "Sign-in succeeded, but quota could not be verified. The account was not saved."
+            oauthError = L10n.string("error.usage_validation")
         } catch OAuthLoginError.stateMismatch {
-            oauthError = "The callback state did not match. Start sign-in again."
+            oauthError = L10n.string("error.state_mismatch")
+        } catch OAuthLoginError.accessTokenNotAccepted {
+            oauthError = L10n.string("error.access_token")
         } catch OAuthLoginError.invalidCallback {
-            oauthError = "Paste the complete callback URL or authorization code."
+            oauthError = L10n.string("error.invalid_callback")
+        } catch let OAuthLoginError.tokenExchangeRejected(reason) {
+            oauthError = message(for: reason)
         } catch OAuthNetworkError.rateLimited {
-            oauthError = "The provider rate-limited token exchange. Try again shortly."
+            oauthError = L10n.string("error.rate_limited")
         } catch OAuthNetworkError.reauthenticationRequired {
-            oauthError = "The provider rejected the login. Start sign-in again."
+            oauthError = L10n.string("error.reauth")
         } catch {
-            oauthError = "OAuth sign-in could not be completed."
+            oauthError = L10n.string("error.oauth_generic")
+        }
+    }
+
+    private func message(for reason: OAuthTokenExchangeReason) -> String {
+        switch reason {
+        case .invalidGrant:
+            L10n.string("error.invalid_grant")
+        case .redirectMismatch:
+            L10n.string("error.redirect_mismatch")
+        case .invalidRequest:
+            L10n.string("error.invalid_request")
+        case .providerRejected:
+            L10n.string("error.provider_rejected")
+        case .unknown:
+            L10n.string("error.token_unknown")
         }
     }
 }
