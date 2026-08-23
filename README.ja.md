@@ -80,9 +80,9 @@ release build、`.app` bundle の生成、ad-hoc 署名、`~/Applications/QuotaB
 
 ### アップデート
 
-QuotaBar は起動時と6時間ごとに GitHub Releases を確認します。新しいバージョンがある場合は Monitor と Settings に release link を表示します。ユーザーが release を確認して DMG をインストールし、CLI の実行や実行ファイルの無断置換は行いません。
+QuotaBar は起動時と6時間ごとに GitHub Releases を確認します。v0.1.8 以降は Sparkle が署名済み HTTPS appcast と update archive を検証してから更新を提案します。更新には引き続きユーザーの承認が必要で、実行ファイルを無断で置き換えることはありません。
 
-現在の build は ad-hoc 署名のため、無人の自動置換は意図的に無効にしています。次の標準構成は Developer ID 署名、Apple notarization、HTTPS appcast、リポジトリ外で管理する Ed25519 key と Sparkle 2.9.6 です。
+v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth ログインを追加し、以降のバージョンでは署名済み Sparkle 更新を利用できます。
 
 ### 必要環境
 
@@ -103,26 +103,23 @@ swift run QuotaBar
 
 ### アカウントを接続
 
-Settings から `Add OAuth account` を選ぶと、選択した provider の標準 credential パスを自動検出します。
+Settings で `Sign in with Claude` または `Sign in with Codex` を選ぶと、ブラウザで OAuth ログインを開始します。承認後、callback URL または authorization code を QuotaBar に貼り付けます。QuotaBar は code を交換し、実際の quota 応答を1回検証してから access / refresh token を macOS Keychain に保存します。
+
+既存の CLI ログインを使う場合は `Use existing credential file (fallback)` を利用できます。
 
 - Claude: `~/.claude/.credentials.json`
 - Codex: `~/.codex/auth.json`
 
-ファイルが存在すれば JSON を手動選択する必要はありません。別の場所に保存している場合のみ `Choose JSON…` を使用します。
-
-| Provider | 標準の credential ファイル |
-| --- | --- |
-| Claude | `~/.claude/.credentials.json` |
-| Codex | `~/.codex/auth.json` |
-
-QuotaBar が保存するのはファイルパスと表示設定だけです。access token / refresh token を QuotaBar の JSON にコピーせず、token の貼り付け欄も提供しません。
+別の場所に credential がある場合のみ JSON picker を使用してください。
 
 ## セキュリティ境界
 
+- 新しい OAuth token は `accounts.json` ではなく macOS Keychain に保存
+- account registry には provider、alias、email、source、deduplication metadata のみ保存
+- Keychain credential は provider token endpoint 経由でアプリが refresh
+- 既存の CLI credential file は互換用 fallback
 - OAuth 専用 — API key の billing 情報をサブスクリプション quota として扱わない
-- refresh 時に provider 管理ファイルから credential を読む
-- token は QuotaBar の永続化領域に保存しない
-- provider ごとに固定した HTTPS host/path のみを利用
+- authorize / token / usage endpoint は固定 HTTPS ポリシーで制限
 - HTTP redirect を拒否
 - Claude Web cookie の scraping なし
 - 外部 CLI の実行なし
@@ -130,7 +127,7 @@ QuotaBar が保存するのはファイルパスと表示設定だけです。ac
 - Refresh は5分ごとに自動実行
 - 手動 Refresh は即時 snapshot を取得
 - Refresh に失敗しても最後に確認した画面を保持
-- token 期限切れ時に CLI を勝手に起動せず、再認証状態を表示
+- token 期限切れ・無効化時は再認証状態を表示
 
 > Claude OAuth usage endpoint と Codex subscription usage endpoint は公開安定 API ではありません。schema や rate limit が変わった場合、推定値ではなく明示的なエラーを表示します。
 
@@ -138,7 +135,8 @@ QuotaBar が保存するのはファイルパスと表示設定だけです。ac
 
 | 場所 | 内容 |
 | --- | --- |
-| `~/Library/Application Support/QuotaBar/accounts.json` | provider、alias、email、email 表示設定、credential path |
+| `~/Library/Application Support/QuotaBar/accounts.json` | provider、alias、email、source、file fallback path、deduplication identity |
+| macOS Keychain (`com.supia.quotabar.oauth`) | アプリ内 OAuth の access / refresh token |
 | `~/Library/Application Support/QuotaBar/display-preferences.json` | アカウントごとの alias / email 表示設定 |
 
 OAuth access / refresh token はこれらのファイルに保存しません。
@@ -166,11 +164,11 @@ git diff --check
 
 ## ロードマップ
 
-- provider-managed Keychain credential fallback
+- provider ポリシーが許せば manual callback paste ではなく native callback 処理
 - Claude/Codex profile endpoint による email 自動取得
 - アカウントごとの stale / re-auth 状態カード
-- OAuth token rotation と first-party OAuth flow の検討
-- full Xcode test target と signed/notarized release pipeline
+- provider token rotation / revoke シナリオのテスト拡充
+- full Xcode test target と signed/notarized release hardening の継続
 
 ## ライセンス
 

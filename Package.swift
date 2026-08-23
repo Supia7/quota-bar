@@ -14,6 +14,9 @@ let package = Package(
         .executable(name: "QuotaBarPreview", targets: ["QuotaBarPreview"]),
         .executable(name: "QuotaBarChecks", targets: ["QuotaBarChecks"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.6")
+    ],
     targets: [
         .target(name: "QuotaBarCore"),
         .target(
@@ -22,7 +25,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "QuotaBar",
-            dependencies: ["QuotaBarUI"]
+            dependencies: ["QuotaBarUI", .product(name: "Sparkle", package: "Sparkle")]
         ),
         .executableTarget(
             name: "QuotaBarPreview",

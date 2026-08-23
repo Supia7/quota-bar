@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-VERSION="${VERSION:-0.1.7}"
+VERSION="${VERSION:-0.1.9}"
 ARCH="${ARCH:-$(uname -m)}"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/dist}"
 BUILD_BIN="${BUILD_BIN:-}"
@@ -15,6 +15,7 @@ SIGN_IDENTITY="${SIGN_IDENTITY:-}"
 NOTARY_KEY_PATH="${NOTARY_KEY_PATH:-}"
 NOTARY_KEY_ID="${NOTARY_KEY_ID:-}"
 NOTARY_ISSUER_ID="${NOTARY_ISSUER_ID:-}"
+APPLE_TEAM_ID="${APPLE_TEAM_ID:-}"
 
 case "$ARCH" in
   arm64|x86_64) ;;
@@ -48,10 +49,19 @@ DMG_PATH="$OUTPUT_DIR/QuotaBar-macos-${ARCH}.dmg"
 CHECKSUM_PATH="$OUTPUT_DIR/SHA256SUMS-${ARCH}"
 
 rm -rf "$APP_DIR" "$ZIP_PATH" "$DMG_PATH" "$CHECKSUM_PATH"
-mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
+mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources" "$APP_DIR/Contents/Frameworks"
 cp "$BUILD_BIN" "$APP_DIR/Contents/MacOS/QuotaBar"
 cp "$ROOT_DIR/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
 chmod 755 "$APP_DIR/Contents/MacOS/QuotaBar"
+
+BUILD_BIN_DIR="$(dirname "$BUILD_BIN")"
+SPARKLE_FRAMEWORK="$BUILD_BIN_DIR/Sparkle.framework"
+if [[ ! -d "$SPARKLE_FRAMEWORK" ]]; then
+  printf 'Sparkle.framework not found next to build binary: %s\n' "$SPARKLE_FRAMEWORK" >&2
+  exit 1
+fi
+ditto "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_DIR/Contents/MacOS/QuotaBar"
 
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_DIR/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP_DIR/Contents/Info.plist"
@@ -86,12 +96,24 @@ make_dmg() {
 }
 
 if [[ -n "$SIGN_IDENTITY" ]]; then
+  # Sparkle contains nested helper apps and must be signed before the host app.
+  codesign --force --deep --timestamp --options runtime \
+    --sign "$SIGN_IDENTITY" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
   # Hardened runtime + secure timestamp are both required for notarization.
   codesign --force --timestamp --options runtime \
     --sign "$SIGN_IDENTITY" "$APP_DIR/Contents/MacOS/QuotaBar"
   codesign --force --timestamp --options runtime \
     --sign "$SIGN_IDENTITY" "$APP_DIR"
-  codesign --verify --strict --verbose=2 "$APP_DIR"
+  codesign --verify --deep --strict --verbose=2 "$APP_DIR"
+  if [[ -z "$APPLE_TEAM_ID" ]]; then
+    printf 'APPLE_TEAM_ID is required for signed builds.\n' >&2
+    exit 1
+  fi
+  actual_team_id="$(codesign -dv --verbose=4 "$APP_DIR" 2>&1 | awk -F= '/^TeamIdentifier=/{print $2; exit}')"
+  if [[ "$actual_team_id" != "$APPLE_TEAM_ID" ]]; then
+    printf 'TeamIdentifier mismatch: expected %s, got %s\n' "$APPLE_TEAM_ID" "$actual_team_id" >&2
+    exit 1
+  fi
 else
   # Ad-hoc signing makes the local bundle structurally valid. Public releases
   # still need a Developer ID signature and Apple notarization for Gatekeeper.

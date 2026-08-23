@@ -23,7 +23,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Verify signing secrets are present
         env:
@@ -77,12 +77,14 @@ jobs:
       - name: Build, sign, and notarize
         env:
           VERSION: 0.1.99
+          BUILD_NUMBER: 999
           ARCH: ${{ matrix.arch }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
           SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
           NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           NOTARY_KEY_PATH="$RUNNER_TEMP/notary-authkey.p8"
           echo "$NOTARY_KEY_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"

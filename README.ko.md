@@ -80,9 +80,9 @@
 
 ### 업데이트
 
-QuotaBar는 앱 시작 시와 6시간마다 GitHub Releases를 확인합니다. 새 버전이 있으면 Monitor와 Settings에 release 링크를 보여줍니다. 사용자가 release를 확인하고 DMG를 설치하며, token·CLI·무인 실행 파일 교체는 하지 않습니다.
+QuotaBar는 실행 시와 6시간마다 GitHub Releases를 확인합니다. v0.1.8부터는 Sparkle이 서명된 HTTPS appcast와 update archive를 검증한 뒤 업데이트를 제안합니다. 업데이트는 여전히 사용자가 승인해야 하며, QuotaBar가 실행 파일을 조용히 교체하지 않습니다.
 
-현재 build는 ad-hoc 서명 상태라 무인 교체를 의도적으로 활성화하지 않았습니다. 정식 다음 단계는 Developer ID 서명, Apple notarization, HTTPS appcast, 저장소 외부 Ed25519 key와 Sparkle 2.9.6 구성입니다.
+v0.1.7은 Sparkle 도입 전 버전이므로 v0.1.7 사용자는 DMG로 v0.1.8을 한 번 수동 설치해야 합니다. v0.1.9에는 앱 내부 OAuth 로그인이 추가되며, 이후 버전부터 서명된 Sparkle 업데이트 경로를 사용할 수 있습니다.
 
 ### 요구사항
 
@@ -103,26 +103,23 @@ swift run QuotaBar
 
 ### 계정 연결
 
-앱의 Settings에서 `Add OAuth account`를 선택하면 provider 기본 credential 경로를 자동으로 찾습니다.
+앱의 Settings에서 `Sign in with Claude` 또는 `Sign in with Codex`를 선택하면 브라우저 OAuth 로그인이 시작됩니다. 승인 후 callback URL 또는 authorization code를 QuotaBar에 붙여 넣으면 됩니다. QuotaBar는 code를 교환한 뒤 실제 quota 응답을 한 번 검증하고, 성공한 경우에만 access/refresh token을 macOS Keychain에 저장합니다. 이후 CLI를 실행하지 않고 직접 갱신합니다.
+
+기존 CLI 로그인 사용자를 위해 `Use existing credential file (fallback)`도 유지합니다.
 
 - Claude: `~/.claude/.credentials.json`
 - Codex: `~/.codex/auth.json`
 
-파일이 있으면 JSON을 직접 선택하지 않아도 버튼이 활성화됩니다. 다른 위치에 credential을 둔 경우에만 `Choose JSON…`을 사용하면 됩니다.
-
-| Provider | 기본 credential 파일 |
-| --- | --- |
-| Claude | `~/.claude/.credentials.json` |
-| Codex | `~/.codex/auth.json` |
-
-QuotaBar는 파일 경로와 표시 설정만 저장합니다. access token과 refresh token을 QuotaBar의 JSON 파일로 복사하지 않으며, 토큰 입력란도 제공하지 않습니다.
+다른 경로에 credential이 있는 경우에만 JSON picker를 사용하면 됩니다.
 
 ## 보안 경계
 
+- 새 OAuth token은 `accounts.json`이 아니라 macOS Keychain에 저장
+- account registry에는 provider, alias, email, source와 deduplication metadata만 저장
+- Keychain credential은 provider token endpoint를 통해 앱이 직접 refresh
+- 기존 CLI credential file은 호환용 fallback
 - OAuth 전용 — API key billing 데이터를 구독 quota로 취급하지 않음
-- credential은 provider-managed 파일에서 refresh 시점에 읽음
-- QuotaBar 자체 저장소에는 token 값이 들어가지 않음
-- Claude와 Codex 각각 고정된 HTTPS host/path만 허용
+- Claude/Codex authorize·token·usage endpoint는 고정 HTTPS 정책으로 제한
 - HTTP redirect는 거부
 - Claude Web cookie scraping 없음
 - 외부 CLI 실행 없음
@@ -130,7 +127,7 @@ QuotaBar는 파일 경로와 표시 설정만 저장합니다. access token과 r
 - 5분마다 자동 refresh
 - 수동 Refresh는 즉시 snapshot 요청
 - refresh 실패 시 마지막으로 확인한 화면을 유지
-- token 만료 시 조용히 CLI를 실행하지 않고 재인증 필요 상태로 처리
+- token 만료·폐기 시 재인증 필요 상태로 표시
 
 > Claude OAuth usage endpoint와 Codex subscription usage endpoint는 공개 안정 API가 아닙니다. endpoint schema나 rate limit 정책이 바뀌면 QuotaBar는 추정값 대신 명시적 오류를 보여줍니다.
 
@@ -138,7 +135,8 @@ QuotaBar는 파일 경로와 표시 설정만 저장합니다. access token과 r
 
 | 위치 | 내용 |
 | --- | --- |
-| `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, email visibility, credential path |
+| `~/Library/Application Support/QuotaBar/accounts.json` | provider, alias, email, source, file fallback path, deduplication identity |
+| macOS Keychain (`com.supia.quotabar.oauth`) | in-app OAuth access/refresh token |
 | `~/Library/Application Support/QuotaBar/display-preferences.json` | 계정별 alias/email 표시 설정 |
 
 저장 파일에는 OAuth access/refresh token을 기록하지 않습니다.
@@ -166,11 +164,11 @@ git diff --check
 
 ## 다음 단계
 
-- provider-managed Keychain credential fallback
+- provider 정책이 허용하는 경우 manual callback paste 대신 native callback 처리
 - Claude/Codex profile endpoint 기반 이메일 자동 조회
 - 계정별 stale / re-auth 상태 카드
-- OAuth token rotation과 provider 공식 인증 흐름 검토
-- full Xcode test target 및 signed/notarized release pipeline
+- provider token rotation·폐기 시나리오 테스트 확대
+- full Xcode test target 및 signed/notarized release hardening 지속
 
 ## 라이선스
 

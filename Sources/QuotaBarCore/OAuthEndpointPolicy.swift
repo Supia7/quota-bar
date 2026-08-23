@@ -28,4 +28,14 @@ public struct OAuthEndpointPolicy: Equatable, Sendable {
         host: "chatgpt.com",
         pathPrefix: "/backend-api/wham/usage"
     )
+
+    public static let claudeToken = OAuthEndpointPolicy(
+        host: "platform.claude.com",
+        pathPrefix: "/v1/oauth/token"
+    )
+
+    public static let codexToken = OAuthEndpointPolicy(
+        host: "auth.openai.com",
+        pathPrefix: "/oauth/token"
+    )
 }
