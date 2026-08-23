@@ -89,7 +89,7 @@ clone 仓库后运行下面一条命令。它会下载当前 Mac 架构对应的
 
 QuotaBar 会在启动时和每 6 小时检查 GitHub Releases。从 v0.1.8 开始，Sparkle 会先验证已签名的 HTTPS appcast 和更新压缩包，再提供更新。更新仍需要用户确认；QuotaBar 不会静默替换可执行文件。
 
-v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加应用内 OAuth，v0.1.10 增加安装位置 guard 和图标，v0.1.13 增加 Settings/OAuth 截图和 OAuth 按钮对比度。
+v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加应用内 OAuth，v0.1.10 增加安装位置 guard 和图标，v0.1.14 增加 Codex loopback callback 自动完成。
 
 ### 环境要求
 
@@ -110,7 +110,7 @@ swift run QuotaBar
 
 ### 连接账号
 
-打开 Settings，选择 `Sign in with Claude` 或 `Sign in with Codex`，即可在浏览器中开始 OAuth 登录。完成授权后，将完整 callback URL 或一次性 authorization code 粘贴回 QuotaBar。不要粘贴 access / refresh token。QuotaBar 会交换 code，先验证一次真实 quota 响应，成功后才把 access / refresh token 保存到 macOS Keychain。
+打开 Settings，选择 `Sign in with Claude` 或 `Sign in with Codex`，即可在浏览器中开始 OAuth 登录。Codex 使用注册的 `http://localhost:1455/auth/callback` loopback redirect，授权后通常会自动回到 QuotaBar 完成登录。Claude 目前使用固定 HTTPS callback，因此需要将完整 callback URL 或一次性 authorization code 粘贴回 QuotaBar。如果 Codex 无法绑定本地 callback port，也会 fallback 到粘贴输入。不要粘贴 access / refresh token。QuotaBar 会交换 code，先验证一次真实 quota 响应，成功后才把 access / refresh token 保存到 macOS Keychain。
 
 ## 安全边界
 

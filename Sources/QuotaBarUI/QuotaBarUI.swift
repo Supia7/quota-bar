@@ -54,10 +54,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.13"
+        ) as? String ?? "0.1.14"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 13)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 14)
         let loadedRegistry = (try? registryStore.load()) ?? AccountRegistry()
         let registry = loadedRegistry.keychainOnly
         if registry != loadedRegistry {
@@ -710,10 +710,56 @@ private struct AccountEditorView: View {
     }
 }
 
+@MainActor
+private final class OAuthLoopbackCoordinator: ObservableObject {
+    @Published var callbackURL: String?
+    @Published var isActive = false
+    @Published var isListening = false
+    @Published var failed = false
+
+    private var server: OAuthLoopbackCallbackServer?
+
+    func start() throws {
+        stop()
+        callbackURL = nil
+        failed = false
+        let server = OAuthLoopbackCallbackServer(port: 1455)
+        try server.start(
+            onReady: { [weak self] _ in
+                Task { @MainActor in
+                    self?.isListening = true
+                }
+            },
+            onCallback: { [weak self] callbackURL in
+                Task { @MainActor in
+                    self?.callbackURL = callbackURL
+                }
+            },
+            onFailure: { [weak self] in
+                Task { @MainActor in
+                    self?.isActive = false
+                    self?.isListening = false
+                    self?.failed = true
+                }
+            }
+        )
+        self.server = server
+        isActive = true
+    }
+
+    func stop() {
+        server?.stop()
+        server = nil
+        isActive = false
+        isListening = false
+    }
+}
+
 public struct QuotaSettingsView: View {
     @ObservedObject public var model: QuotaBarModel
     private let onDone: (() -> Void)?
     private let updateAction: (@MainActor () -> Void)?
+    @StateObject private var loopbackCoordinator = OAuthLoopbackCoordinator()
     @State private var oauthRequest: OAuthAuthorizationRequest?
     @State private var callbackInput = ""
     @State private var isCompletingOAuth = false
@@ -756,34 +802,51 @@ public struct QuotaSettingsView: View {
             }
 
             if let oauthRequest {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L10n.string("oauth.callback_instruction"))
+                if oauthRequest.provider == .codex && loopbackCoordinator.isActive {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(
+                            L10n.string("oauth.auto_callback_waiting"),
+                            systemImage: "arrow.triangle.2.circlepath"
+                        )
                         .font(.caption)
-                    Text(L10n.string("oauth.callback_warning"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    TextField(
-                        L10n.string("oauth.callback_placeholder"),
-                        text: $callbackInput
-                    )
-                    .textFieldStyle(.roundedBorder)
-                    HStack {
-                        Button(isCompletingOAuth
-                            ? L10n.string("oauth.completing")
-                            : L10n.string("oauth.complete")) {
-                            Task { await completeOAuthLogin(oauthRequest) }
-                        }
-                        .disabled(isCompletingOAuth || callbackInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        Text(L10n.string("oauth.auto_callback_description"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                         Button(L10n.string("common.cancel")) {
-                            self.oauthRequest = nil
-                            callbackInput = ""
-                            oauthError = nil
+                            cancelOAuthLogin()
                         }
                         .buttonStyle(.borderless)
                     }
+                    .padding(10)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(L10n.string("oauth.callback_instruction"))
+                            .font(.caption)
+                        Text(L10n.string("oauth.callback_warning"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        TextField(
+                            L10n.string("oauth.callback_placeholder"),
+                            text: $callbackInput
+                        )
+                        .textFieldStyle(.roundedBorder)
+                        HStack {
+                            Button(isCompletingOAuth
+                                ? L10n.string("oauth.completing")
+                                : L10n.string("oauth.complete")) {
+                                Task { await completeOAuthLogin(oauthRequest) }
+                            }
+                            .disabled(isCompletingOAuth || callbackInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            Button(L10n.string("common.cancel")) {
+                                cancelOAuthLogin()
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                    .padding(10)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
                 }
-                .padding(10)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             }
             if let oauthError {
                 Label(oauthError, systemImage: "exclamationmark.triangle")
@@ -902,6 +965,19 @@ public struct QuotaSettingsView: View {
             .padding(28)
         }
         .frame(maxWidth: .infinity)
+        .onChange(of: loopbackCoordinator.callbackURL) { _, callbackURL in
+            guard let callbackURL, let request = oauthRequest else { return }
+            callbackInput = callbackURL
+            Task { await completeOAuthLogin(request) }
+        }
+        .onChange(of: loopbackCoordinator.failed) { _, failed in
+            if failed {
+                oauthError = L10n.string("error.local_callback_unavailable")
+            }
+        }
+        .onDisappear {
+            loopbackCoordinator.stop()
+        }
     }
 
     private func startOAuthLogin(for provider: QuotaProviderID) {
@@ -910,6 +986,14 @@ public struct QuotaSettingsView: View {
             oauthRequest = request
             callbackInput = ""
             oauthError = nil
+            if provider == .codex {
+                do {
+                    try loopbackCoordinator.start()
+                } catch {
+                    loopbackCoordinator.failed = true
+                    oauthError = L10n.string("error.local_callback_unavailable")
+                }
+            }
             NSWorkspace.shared.open(request.url)
         } catch {
             oauthError = L10n.string("error.browser_login_failed")
@@ -919,7 +1003,10 @@ public struct QuotaSettingsView: View {
     private func completeOAuthLogin(_ request: OAuthAuthorizationRequest) async {
         isCompletingOAuth = true
         oauthError = nil
-        defer { isCompletingOAuth = false }
+        defer {
+            isCompletingOAuth = false
+            loopbackCoordinator.stop()
+        }
         do {
             let callback = try OAuthCallbackParser.parse(
                 callbackInput,
@@ -954,6 +1041,13 @@ public struct QuotaSettingsView: View {
         } catch {
             oauthError = L10n.string("error.oauth_generic")
         }
+    }
+
+    private func cancelOAuthLogin() {
+        loopbackCoordinator.stop()
+        oauthRequest = nil
+        callbackInput = ""
+        oauthError = nil
     }
 
     private func message(for reason: OAuthTokenExchangeReason) -> String {

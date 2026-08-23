@@ -27,6 +27,8 @@
 "oauth.callback_placeholder" = "Callback URLまたは一度だけのcode";
 "oauth.completing" = "サインインを完了中…";
 "oauth.complete" = "サインインを完了";
+"oauth.auto_callback_waiting" = "ブラウザ callback を待っています…";
+"oauth.auto_callback_description" = "承認すると Codex が QuotaBar に自動で callback します。";
 "account.remove" = "アカウントを削除";
 "account.edit" = "アカウントを編集";
 "account.provider" = "Provider";
@@ -67,6 +69,7 @@
 "error.refresh_rate_limited" = "Providerにより制限されたため、最後のデータを保持します。";
 "error.refresh_generic" = "更新に失敗しました。最後のデータを保持します。";
 "error.browser_login_failed" = "ブラウザログインを開始できませんでした。";
+"error.local_callback_unavailable" = "Codex の自動 callback を利用できません。代わりに callback URL を貼り付けられます。";
 "account.toggle_details" = "quota詳細を表示/非表示";
 "monitor.sample_data" = "SAMPLE DATA";
 "view.accounts" = "アカウント";

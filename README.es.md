@@ -89,7 +89,7 @@ Compila el binario release, crea el bundle `.app`, aplica una firma ad-hoc, lo c
 
 QuotaBar consulta GitHub Releases al iniciar y cada seis horas. Desde v0.1.8, Sparkle también verifica el appcast HTTPS firmado y el archivo de actualización antes de ofrecerla. La actualización sigue requiriendo la aprobación del usuario; QuotaBar nunca reemplaza silenciosamente el ejecutable.
 
-v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. v0.1.9 añadió el inicio de sesión OAuth dentro de la app; v0.1.10 añadió el guard de ubicación y el icono; v0.1.13 añade la captura de Settings/OAuth y contraste explícito para los botones OAuth.
+v0.1.7 es anterior a Sparkle, así que quienes usen v0.1.7 deben instalar v0.1.8 una vez desde el DMG. v0.1.9 añadió el inicio de sesión OAuth dentro de la app; v0.1.10 añadió el guard de ubicación y el icono; v0.1.14 añade la finalización automática del callback loopback de Codex.
 
 ### Requisitos
 
@@ -110,7 +110,7 @@ swift run QuotaBar
 
 ### Conectar una cuenta
 
-Abre Settings y elige `Sign in with Claude` o `Sign in with Codex` para iniciar el OAuth en el navegador. Después de aprobarlo, pega en QuotaBar la callback URL completa o el authorization code de un solo uso. No pegues un access/refresh token. QuotaBar intercambia el code, verifica una respuesta real de quota y solo entonces guarda los access/refresh tokens en el Keychain de macOS.
+Abre Settings y elige `Sign in with Claude` o `Sign in with Codex` para iniciar el OAuth en el navegador. Codex usa el loopback redirect registrado `http://localhost:1455/auth/callback`, así que normalmente vuelve a QuotaBar y completa el acceso automáticamente después de aprobarlo. Claude usa actualmente una callback HTTPS fija, por lo que debes pegar en QuotaBar la callback URL completa o el authorization code de un solo uso. Si Codex no puede enlazar el puerto local, también ofrece fallback mediante pegado. No pegues un access/refresh token. QuotaBar intercambia el code, verifica una respuesta real de quota y solo entonces guarda los access/refresh tokens en el Keychain de macOS.
 
 ## Límite de seguridad
 

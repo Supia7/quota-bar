@@ -89,7 +89,7 @@ release build、`.app` bundle の生成、ad-hoc 署名、`~/Applications/QuotaB
 
 QuotaBar は起動時と6時間ごとに GitHub Releases を確認します。v0.1.8 以降は Sparkle が署名済み HTTPS appcast と update archive を検証してから更新を提案します。更新には引き続きユーザーの承認が必要で、実行ファイルを無断で置き換えることはありません。
 
-v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth、v0.1.10 ではインストール場所の guard とロゴ、v0.1.13 では Settings / OAuth のスクリーンショットと OAuth ボタンのコントラストを追加しました。
+v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth、v0.1.10 ではインストール場所の guard とロゴ、v0.1.14 では Codex loopback callback の自動完了を追加しました。
 
 ### 必要環境
 
@@ -110,7 +110,7 @@ swift run QuotaBar
 
 ### アカウントを接続
 
-Settings で `Sign in with Claude` または `Sign in with Codex` を選ぶと、ブラウザで OAuth ログインを開始します。承認後、完全な callback URL または一度だけ使える authorization code を QuotaBar に貼り付けます。access / refresh token は貼り付けないでください。QuotaBar は code を交換し、実際の quota 応答を1回検証してから access / refresh token を macOS Keychain に保存します。
+Settings で `Sign in with Claude` または `Sign in with Codex` を選ぶと、ブラウザで OAuth ログインを開始します。Codex は登録済みの `http://localhost:1455/auth/callback` loopback redirect を使うため、承認後は通常 QuotaBar が自動で完了します。Claude は現在固定 HTTPS callback を使うため、完全な callback URL または一度だけ使える authorization code を QuotaBar に貼り付けます。Codex もローカル callback port を利用できない場合は貼り付け入力に fallback します。access / refresh token は貼り付けないでください。QuotaBar は code を交換し、実際の quota 応答を1回検証してから access / refresh token を macOS Keychain に保存します。
 
 ## セキュリティ境界
 

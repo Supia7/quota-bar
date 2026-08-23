@@ -91,7 +91,7 @@ QuotaBar checks GitHub Releases when it launches and every six hours. Starting w
 
 If QuotaBar is opened directly from a DMG, Downloads, or another temporary/read-only location, it now stops before Sparkle and offers to copy itself to `~/Applications`. Sparkle can only replace an installed writable app bundle, so this avoids the macOS “can’t be updated because it was opened from a read-only or temporary location” dialog.
 
-v0.1.7 predates Sparkle, so users on v0.1.7 must install v0.1.8 once from the DMG. v0.1.9 added in-app OAuth sign-in; v0.1.10 added the install-location guard and app icon; v0.1.13 adds the Settings/OAuth screenshot and explicit OAuth button contrast.
+v0.1.7 predates Sparkle, so users on v0.1.7 must install v0.1.8 once from the DMG. v0.1.9 added in-app OAuth sign-in; v0.1.10 added the install-location guard and app icon; v0.1.14 adds automatic Codex loopback callback completion.
 
 ### Requirements
 
@@ -112,7 +112,7 @@ swift run QuotaBar
 
 ### Connect an account
 
-Open Settings and choose `Sign in with Claude` or `Sign in with Codex` to start a provider OAuth login in your browser. After approval, paste the complete callback URL, or the one-time authorization code, back into QuotaBar. Do not paste an access or refresh token. QuotaBar exchanges the code, verifies one real quota response, and only then stores the resulting access/refresh tokens in the macOS Keychain.
+Open Settings and choose `Sign in with Claude` or `Sign in with Codex` to start a provider OAuth login in your browser. Codex uses the registered `http://localhost:1455/auth/callback` loopback redirect and normally completes automatically after approval. Claude currently uses a fixed HTTPS callback, so paste its complete callback URL or one-time authorization code into QuotaBar. If Codex cannot bind the local callback port, it also falls back to the same paste field. Do not paste an access or refresh token. QuotaBar exchanges the code, verifies one real quota response, and only then stores the resulting access/refresh tokens in the macOS Keychain.
 
 ## Security boundary
 

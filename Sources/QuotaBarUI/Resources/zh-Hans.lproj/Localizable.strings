@@ -27,6 +27,8 @@
 "oauth.callback_placeholder" = "Callback URL 或一次性 code";
 "oauth.completing" = "正在完成登录…";
 "oauth.complete" = "完成登录";
+"oauth.auto_callback_waiting" = "正在等待浏览器 callback…";
+"oauth.auto_callback_description" = "授权后 Codex 会自动返回 QuotaBar。";
 "account.remove" = "移除账号";
 "account.edit" = "编辑账号";
 "account.provider" = "Provider";
@@ -67,6 +69,7 @@
 "error.refresh_rate_limited" = "Provider 限制了刷新请求，保留上次数据。";
 "error.refresh_generic" = "刷新失败，保留上次数据。";
 "error.browser_login_failed" = "无法启动浏览器登录。";
+"error.local_callback_unavailable" = "Codex 自动 callback 不可用。你仍可以粘贴 callback URL。";
 "account.toggle_details" = "显示或隐藏 quota 详情";
 "monitor.sample_data" = "SAMPLE DATA";
 "view.accounts" = "账号";
