@@ -54,10 +54,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.14"
+        ) as? String ?? "0.1.15"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 14)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 15)
         let loadedRegistry = (try? registryStore.load()) ?? AccountRegistry()
         let registry = loadedRegistry.keychainOnly
         if registry != loadedRegistry {

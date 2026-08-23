@@ -89,7 +89,7 @@ release build、`.app` bundle の生成、ad-hoc 署名、`~/Applications/QuotaB
 
 QuotaBar は起動時と6時間ごとに GitHub Releases を確認します。v0.1.8 以降は Sparkle が署名済み HTTPS appcast と update archive を検証してから更新を提案します。更新には引き続きユーザーの承認が必要で、実行ファイルを無断で置き換えることはありません。
 
-v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth、v0.1.10 ではインストール場所の guard とロゴ、v0.1.14 では Codex loopback callback の自動完了を追加しました。
+v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth、v0.1.10 ではインストール場所の guard とロゴ、v0.1.14 では Codex loopback callback の自動完了、v0.1.15 では安定した AppKit status item と popover を追加しました。
 
 ### 必要環境
 

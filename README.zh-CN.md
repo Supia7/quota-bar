@@ -89,7 +89,7 @@ clone 仓库后运行下面一条命令。它会下载当前 Mac 架构对应的
 
 QuotaBar 会在启动时和每 6 小时检查 GitHub Releases。从 v0.1.8 开始，Sparkle 会先验证已签名的 HTTPS appcast 和更新压缩包，再提供更新。更新仍需要用户确认；QuotaBar 不会静默替换可执行文件。
 
-v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加应用内 OAuth，v0.1.10 增加安装位置 guard 和图标，v0.1.14 增加 Codex loopback callback 自动完成。
+v0.1.7 发布时还没有 Sparkle，因此 v0.1.7 用户需要先从 DMG 手动安装一次 v0.1.8。v0.1.9 增加应用内 OAuth，v0.1.10 增加安装位置 guard 和图标，v0.1.14 增加 Codex loopback callback 自动完成，v0.1.15 增加稳定的 AppKit status item 和 popover。
 
 ### 环境要求
 

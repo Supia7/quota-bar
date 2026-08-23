@@ -14,7 +14,7 @@ final class QuotaBarSparkleUpdater: ObservableObject {
             userDriverDelegate: nil
         )
 
-        // Let MenuBarExtra finish launching before presenting an installation hint.
+        // Let the manually managed status item finish launching before presenting an installation hint.
         Task { @MainActor [weak self] in
             self?.startUpdaterIfPossible()
         }
