@@ -103,6 +103,7 @@ public enum OAuthLoginError: Error, Equatable {
     case tokenExchangeFailed
     case tokenExchangeRejected(OAuthTokenExchangeReason)
     case invalidTokenResponse
+    case missingAccountIdentity
     case unsupportedProvider
 }
 
@@ -214,9 +215,17 @@ public enum OAuthTokenResponseDecoder {
         }
 
         let claims = response.idToken.flatMap(Self.jwtClaims)
-        let accountID = response.accountID
+        let accessClaims = Self.jwtClaims(accessToken)
+        let responseAccountID = response.accountID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let accountID = (responseAccountID?.isEmpty == false ? responseAccountID : nil)
             ?? (claims?["https://api.openai.com/auth"] as? [String: Any])?["chatgpt_account_id"] as? String
-        let email = claims?["email"] as? String
+            ?? Self.stableIdentity(from: claims)
+            ?? Self.stableIdentity(from: accessClaims)
+        let email = (claims?["email"] as? String)
+            ?? (accessClaims?["email"] as? String)
+        guard accountID != nil || !(email?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) else {
+            throw OAuthLoginError.missingAccountIdentity
+        }
         let expiresAt = response.expiresIn.map {
             now.addingTimeInterval(max(0, $0 - 300))
         } ?? Self.jwtExpiry(accessToken)
@@ -243,6 +252,16 @@ public enum OAuthTokenResponseDecoder {
         encoded += String(repeating: "=", count: (4 - encoded.count % 4) % 4)
         guard let data = Data(base64Encoded: encoded) else { return nil }
         return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private static func stableIdentity(from claims: [String: Any]?) -> String? {
+        guard let claims else { return nil }
+        for key in ["sub", "user_id", "userId", "account_id", "accountId", "oid"] {
+            if let value = claims[key] as? String, !value.isEmpty {
+                return value
+            }
+        }
+        return nil
     }
 
     private static func jwtExpiry(_ token: String) -> Date? {
