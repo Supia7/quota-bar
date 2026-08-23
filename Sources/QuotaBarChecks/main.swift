@@ -386,6 +386,28 @@ enum QuotaBarChecks {
                 && tokenCredential.accountID == "account-fixture",
             "OAuth token response must decode into an in-memory credential"
         )
+        let claimIdentityFixture = try JSONSerialization.data(withJSONObject: [
+            "access_token": "eyJhbGciOiJub25lIn0.eyJzdWIiOiJzdGFibGUtc3ViIn0.c2ln",
+            "refresh_token": "refresh-claim-fixture"
+        ] as [String: Any])
+        let claimIdentityCredential = try OAuthTokenResponseDecoder.decode(
+            claimIdentityFixture,
+            provider: .codex
+        )
+        try check(
+            claimIdentityCredential.accountID == "stable-sub",
+            "OAuth JWT subject must become a stable account identity"
+        )
+        let missingIdentityFixture = try JSONSerialization.data(withJSONObject: [
+            "access_token": "opaque-access-fixture",
+            "refresh_token": "opaque-refresh-fixture"
+        ] as [String: Any])
+        do {
+            _ = try OAuthTokenResponseDecoder.decode(missingIdentityFixture, provider: .codex)
+            throw CheckFailure("OAuth token without a stable identity must be rejected")
+        } catch OAuthLoginError.missingAccountIdentity {
+            // expected
+        }
         let keychainStore = KeychainOAuthCredentialStore()
         let keychainID = UUID()
         try keychainStore.save(tokenCredential, for: keychainID)
