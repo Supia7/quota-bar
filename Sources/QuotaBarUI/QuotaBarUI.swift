@@ -54,10 +54,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.12"
+        ) as? String ?? "0.1.13"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 12)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 13)
         let loadedRegistry = (try? registryStore.load()) ?? AccountRegistry()
         let registry = loadedRegistry.keychainOnly
         if registry != loadedRegistry {
@@ -740,11 +740,19 @@ public struct QuotaSettingsView: View {
                 Button(L10n.string("provider.sign_in_claude")) {
                     startOAuthLogin(for: .claude)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.blue, in: RoundedRectangle(cornerRadius: 7))
                 Button(L10n.string("provider.sign_in_codex")) {
                     startOAuthLogin(for: .codex)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.blue, in: RoundedRectangle(cornerRadius: 7))
             }
 
             if let oauthRequest {

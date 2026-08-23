@@ -24,12 +24,14 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/quotabar-accounts.png" alt="Claude와 Codex 계정을 한 줄씩 표시하는 compact 계정 보기"></td>
-    <td width="50%"><img src="docs/images/quotabar-limit-types.png" alt="5시간·Weekly·Fable 제한별 한 줄 계정 요약 보기"></td>
+    <td width="33%"><img src="docs/images/quotabar-accounts.png" alt="Claude와 Codex 계정을 한 줄씩 표시하는 compact 계정 보기"></td>
+    <td width="33%"><img src="docs/images/quotabar-limit-types.png" alt="5시간·Weekly·Fable 제한별 한 줄 계정 요약 보기"></td>
+    <td width="33%"><img src="docs/images/quotabar-settings.png" alt="브라우저 OAuth 로그인과 Keychain 전용 보안을 보여주는 Settings 보기"></td>
   </tr>
   <tr>
     <td align="center"><sub>Compact 계정 보기</sub></td>
     <td align="center"><sub>Compact 제한 종류 보기</sub></td>
+    <td align="center"><sub>Settings·OAuth 보기</sub></td>
   </tr>
 </table>
 
@@ -87,7 +89,7 @@
 
 QuotaBar는 실행 시와 6시간마다 GitHub Releases를 확인합니다. v0.1.8부터는 Sparkle이 서명된 HTTPS appcast와 update archive를 검증한 뒤 업데이트를 제안합니다. 업데이트는 여전히 사용자가 승인해야 하며, QuotaBar가 실행 파일을 조용히 교체하지 않습니다.
 
-v0.1.7은 Sparkle 도입 전 버전이므로 v0.1.7 사용자는 DMG로 v0.1.8을 한 번 수동 설치해야 합니다. v0.1.9에는 앱 내부 OAuth 로그인이, v0.1.10에는 설치 경로 guard와 로고가, v0.1.12에는 light/dark 카드 대비와 compact UI 캡처가 추가되었습니다.
+v0.1.7은 Sparkle 도입 전 버전이므로 v0.1.7 사용자는 DMG로 v0.1.8을 한 번 수동 설치해야 합니다. v0.1.9에는 앱 내부 OAuth 로그인이, v0.1.10에는 설치 경로 guard와 로고가, v0.1.13에는 Settings/OAuth 캡처와 OAuth 버튼 대비가 추가되었습니다.
 
 ### 요구사항
 
