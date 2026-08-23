@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Solid muted background: one named product canvas color. -->
+  <rect width="1024" height="1024" fill="#DCE8ED"/>
+
+  <!-- One rounded, friendly character emerging from the lower-right. -->
+  <circle cx="468" cy="286" r="126" fill="#F47B67"/>
+  <circle cx="735" cy="306" r="126" fill="#F47B67"/>
+  <path fill="#F47B67" d="M408 352c-69 53-111 140-108 238 2 63 25 111 63 150-52 64-79 151-63 235 20 108 111 183 235 198h234c130-10 228-93 247-211 17-107-21-212-103-280 20-43 28-92 18-143-18-91-84-161-170-193-63-24-126-19-179 6-50-37-113-39-174 0Z"/>
+
+  <!-- One defining product feature: a broad quota bar on the belly. -->
+  <rect x="435" y="655" width="406" height="142" rx="71" fill="#203A4A"/>
+  <rect x="500" y="702" width="276" height="48" rx="24" fill="#DCE8ED"/>
+
+  <!-- Simple facial marks reuse the second IP color. -->
+  <circle cx="535" cy="505" r="24" fill="#203A4A"/>
+  <circle cx="730" cy="505" r="24" fill="#203A4A"/>
+  <path fill="#203A4A" d="M614 565c0-13 10-23 23-23s23 10 23 23c0 18-18 32-23 32s-23-14-23-32Z"/>
+</svg>

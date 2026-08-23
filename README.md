@@ -60,7 +60,7 @@ Compare multiple accounts by account or by limit type, while keeping aliases and
 2. Open the DMG and drag `QuotaBar.app` to `Applications`.
 3. On first launch, if macOS shows a warning, right-click the app and choose **Open**.
 
-Current release artifacts are ad-hoc signed. Until a Developer ID signature and Apple notarization are added, Gatekeeper may ask you to confirm the developer.
+Current published releases are Developer ID signed and notarized. Local source builds remain ad-hoc signed and may require a manual confirmation from macOS.
 
 ### Terminal — install the latest release
 
@@ -81,6 +81,8 @@ This builds the release binary, creates the `.app` bundle, applies an ad-hoc sig
 ### Updates
 
 QuotaBar checks GitHub Releases when it launches and every six hours. Starting with v0.1.8, Sparkle also verifies the signed HTTPS appcast and update archive before offering an update. Updates still require user approval; QuotaBar never performs a silent executable replacement.
+
+If QuotaBar is opened directly from a DMG, Downloads, or another temporary/read-only location, it now stops before Sparkle and offers to copy itself to `~/Applications`. Sparkle can only replace an installed writable app bundle, so this avoids the macOS “can’t be updated because it was opened from a read-only or temporary location” dialog.
 
 Because v0.1.7 predates Sparkle, users on v0.1.7 must install v0.1.8 once from the DMG. v0.1.9 adds in-app OAuth sign-in; later versions can use the signed Sparkle update path.
 
