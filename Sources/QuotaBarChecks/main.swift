@@ -54,6 +54,30 @@ enum QuotaBarChecks {
             // expected
         }
 
+        let loopbackCapture = LoopbackCapture()
+        let loopbackServer = OAuthLoopbackCallbackServer(port: 41455)
+        try loopbackServer.start(
+            onReady: { port in
+                Task { await loopbackCapture.ready(port) }
+            },
+            onCallback: { callbackURL in
+                Task { await loopbackCapture.callback(callbackURL) }
+            },
+            onFailure: {
+                Task { await loopbackCapture.failed() }
+            }
+        )
+        let loopbackPort = try await loopbackCapture.waitForPort()
+        let loopbackURL = URL(string: "http://127.0.0.1:\(loopbackPort)/auth/callback?code=auto-code&state=auto-state")!
+        let (_, loopbackResponse) = try await URLSession(configuration: .ephemeral).data(from: loopbackURL)
+        try check(
+            (loopbackResponse as? HTTPURLResponse)?.statusCode == 200,
+            "loopback OAuth callback must return an HTTP success response"
+        )
+        let receivedCallback = try await loopbackCapture.waitForCallback()
+        _ = try OAuthCallbackParser.parse(receivedCallback, expectedState: "auto-state")
+        loopbackServer.stop()
+
         try check(
             QuotaWindow(
                 id: "over",
@@ -433,6 +457,47 @@ enum QuotaBarChecks {
         guard condition() else {
             throw CheckFailure(message)
         }
+    }
+}
+
+private actor LoopbackCapture {
+    private var port: UInt16?
+    private var callbackURL: String?
+    private var didFail = false
+
+    func ready(_ port: UInt16) {
+        self.port = port
+    }
+
+    func callback(_ callbackURL: String) {
+        self.callbackURL = callbackURL
+    }
+
+    func failed() {
+        didFail = true
+    }
+
+    func waitForPort() async throws -> UInt16 {
+        for _ in 0..<100 {
+            if didFail {
+                throw CheckFailure("loopback callback server failed to start")
+            }
+            if let port {
+                return port
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw CheckFailure("loopback callback server did not become ready")
+    }
+
+    func waitForCallback() async throws -> String {
+        for _ in 0..<100 {
+            if let callbackURL {
+                return callbackURL
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw CheckFailure("loopback callback server did not receive a callback")
     }
 }
 

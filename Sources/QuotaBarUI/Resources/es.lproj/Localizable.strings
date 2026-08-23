@@ -27,6 +27,8 @@
 "oauth.callback_placeholder" = "URL callback o code de un solo uso";
 "oauth.completing" = "Completando…";
 "oauth.complete" = "Completar inicio de sesión";
+"oauth.auto_callback_waiting" = "Esperando el callback del navegador…";
+"oauth.auto_callback_description" = "Después de aprobarlo, Codex volverá automáticamente a QuotaBar.";
 "account.remove" = "Eliminar cuenta";
 "account.edit" = "Editar cuenta";
 "account.provider" = "Proveedor";
@@ -67,6 +69,7 @@
 "error.refresh_rate_limited" = "El proveedor limitó la actualización; se conservan los últimos datos.";
 "error.refresh_generic" = "No se pudo actualizar; se conservan los últimos datos.";
 "error.browser_login_failed" = "No se pudo iniciar el acceso en el navegador.";
+"error.local_callback_unavailable" = "El callback automático de Codex no está disponible. Puedes pegar la callback URL.";
 "account.toggle_details" = "Mostrar u ocultar detalles de cuota";
 "monitor.sample_data" = "SAMPLE DATA";
 "view.accounts" = "Cuentas";

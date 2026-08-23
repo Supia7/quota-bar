@@ -27,6 +27,8 @@
 "oauth.callback_placeholder" = "Callback URL 또는 일회용 code";
 "oauth.completing" = "로그인 완료 중…";
 "oauth.complete" = "로그인 완료";
+"oauth.auto_callback_waiting" = "브라우저 callback을 기다리는 중…";
+"oauth.auto_callback_description" = "승인하면 Codex가 QuotaBar로 자동 callback합니다.";
 "account.remove" = "계정 제거";
 "account.edit" = "계정 편집";
 "account.provider" = "Provider";
@@ -67,6 +69,7 @@
 "error.refresh_rate_limited" = "Provider 요청이 제한되어 마지막 데이터를 유지합니다.";
 "error.refresh_generic" = "새로고침에 실패했습니다. 마지막 데이터를 유지합니다.";
 "error.browser_login_failed" = "브라우저 로그인을 시작하지 못했습니다.";
+"error.local_callback_unavailable" = "Codex 자동 callback을 사용할 수 없습니다. 대신 callback URL을 붙여 넣을 수 있습니다.";
 "account.toggle_details" = "quota 상세 표시/숨기기";
 "monitor.sample_data" = "SAMPLE DATA";
 "view.accounts" = "계정";

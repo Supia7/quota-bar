@@ -27,6 +27,8 @@
 "oauth.callback_placeholder" = "Callback URL or one-time code";
 "oauth.completing" = "Completing…";
 "oauth.complete" = "Complete sign-in";
+"oauth.auto_callback_waiting" = "Waiting for the browser callback…";
+"oauth.auto_callback_description" = "Codex will return to QuotaBar automatically after approval.";
 "account.remove" = "Remove account";
 "account.edit" = "Edit account";
 "account.provider" = "Provider";
@@ -67,6 +69,7 @@
 "error.refresh_rate_limited" = "Provider rate limited the refresh. Keeping the last data.";
 "error.refresh_generic" = "Refresh failed. Keeping the last data.";
 "error.browser_login_failed" = "Could not start browser login.";
+"error.local_callback_unavailable" = "Automatic Codex callback is unavailable. You can paste the callback URL instead.";
 "account.toggle_details" = "Show or hide quota details";
 "monitor.sample_data" = "SAMPLE DATA";
 "view.accounts" = "Accounts";
