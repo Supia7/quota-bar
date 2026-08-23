@@ -24,12 +24,12 @@ Compare multiple accounts by account or by limit type, while keeping aliases and
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/quotabar-accounts.png" alt="Accounts view showing Claude and Codex accounts"></td>
-    <td width="50%"><img src="docs/images/quotabar-limit-types.png" alt="Limit types view grouping five-hour, weekly, and Fable limits"></td>
+    <td width="50%"><img src="docs/images/quotabar-accounts.png" alt="Compact Accounts view with one row per Claude or Codex account"></td>
+    <td width="50%"><img src="docs/images/quotabar-limit-types.png" alt="Compact limit-types view grouping one-row account summaries by five-hour, weekly, and Fable limits"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Accounts view</sub></td>
-    <td align="center"><sub>Limit types view</sub></td>
+    <td align="center"><sub>Compact accounts view</sub></td>
+    <td align="center"><sub>Compact limit types view</sub></td>
   </tr>
 </table>
 
@@ -89,7 +89,7 @@ QuotaBar checks GitHub Releases when it launches and every six hours. Starting w
 
 If QuotaBar is opened directly from a DMG, Downloads, or another temporary/read-only location, it now stops before Sparkle and offers to copy itself to `~/Applications`. Sparkle can only replace an installed writable app bundle, so this avoids the macOS “can’t be updated because it was opened from a read-only or temporary location” dialog.
 
-v0.1.7 predates Sparkle, so users on v0.1.7 must install v0.1.8 once from the DMG. v0.1.9 added in-app OAuth sign-in; v0.1.10 added the install-location guard and app icon; v0.1.11 adds the OAuth-only compact UI.
+v0.1.7 predates Sparkle, so users on v0.1.7 must install v0.1.8 once from the DMG. v0.1.9 added in-app OAuth sign-in; v0.1.10 added the install-location guard and app icon; v0.1.12 adds explicit light/dark card contrast and refreshed compact UI screenshots.
 
 ### Requirements
 

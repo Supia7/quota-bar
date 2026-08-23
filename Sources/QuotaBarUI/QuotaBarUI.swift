@@ -54,10 +54,10 @@ public final class QuotaBarModel: ObservableObject {
         self.updateChecker = updateChecker
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.11"
+        ) as? String ?? "0.1.12"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 11)
+            ?? ReleaseVersion(major: 0, minor: 1, patch: 12)
         let loadedRegistry = (try? registryStore.load()) ?? AccountRegistry()
         let registry = loadedRegistry.keychainOnly
         if registry != loadedRegistry {
@@ -457,6 +457,7 @@ private struct AccountQuotaCard: View {
     let account: QuotaAccount
     let rows: [QuotaGroupRow]
     let onEdit: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
 
     var body: some View {
@@ -506,7 +507,18 @@ private struct AccountQuotaCard: View {
             }
         }
         .padding(12)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+        .foregroundStyle(cardForeground)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var cardForeground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var cardBackground: Color {
+        colorScheme == .dark
+            ? Color(red: 0.16, green: 0.18, blue: 0.19)
+            : Color(red: 0.94, green: 0.95, blue: 0.96)
     }
 }
 
@@ -536,6 +548,7 @@ private struct CompactQuotaBadge: View {
 private struct LimitTypeCard: View {
     let group: QuotaGroup
     let onEdit: (UUID) -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -576,7 +589,18 @@ private struct LimitTypeCard: View {
             }
         }
         .padding(12)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 12))
+        .foregroundStyle(cardForeground)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var cardForeground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var cardBackground: Color {
+        colorScheme == .dark
+            ? Color(red: 0.16, green: 0.18, blue: 0.19)
+            : Color(red: 0.94, green: 0.95, blue: 0.96)
     }
 }
 

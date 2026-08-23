@@ -24,12 +24,12 @@
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/images/quotabar-accounts.png" alt="Claude と Codex のアカウント別表示"></td>
-    <td width="50%"><img src="docs/images/quotabar-limit-types.png" alt="5時間、Weekly、Fable の制限種類別表示"></td>
+    <td width="50%"><img src="docs/images/quotabar-accounts.png" alt="Claude と Codex を1行ずつ表示する compact アカウント表示"></td>
+    <td width="50%"><img src="docs/images/quotabar-limit-types.png" alt="5時間、Weekly、Fable ごとの1行アカウントサマリー"></td>
   </tr>
   <tr>
-    <td align="center"><sub>アカウント別表示</sub></td>
-    <td align="center"><sub>制限種類別表示</sub></td>
+    <td align="center"><sub>Compact アカウント表示</sub></td>
+    <td align="center"><sub>Compact 制限種類別表示</sub></td>
   </tr>
 </table>
 
@@ -87,7 +87,7 @@ release build、`.app` bundle の生成、ad-hoc 署名、`~/Applications/QuotaB
 
 QuotaBar は起動時と6時間ごとに GitHub Releases を確認します。v0.1.8 以降は Sparkle が署名済み HTTPS appcast と update archive を検証してから更新を提案します。更新には引き続きユーザーの承認が必要で、実行ファイルを無断で置き換えることはありません。
 
-v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth、v0.1.10 ではインストール場所の guard とロゴ、v0.1.11 では OAuth 専用 compact UI を追加しました。
+v0.1.7 は Sparkle 導入前のバージョンです。v0.1.7 のユーザーは DMG から v0.1.8 を一度手動でインストールしてください。v0.1.9 ではアプリ内 OAuth、v0.1.10 ではインストール場所の guard とロゴ、v0.1.12 では light / dark カードのコントラストと compact UI のスクリーンショットを追加しました。
 
 ### 必要環境
 
