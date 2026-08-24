@@ -1,6 +1,6 @@
 import Foundation
 
-public enum QuotaProviderID: String, CaseIterable, Codable, Sendable {
+public enum QuotaProviderID: String, CaseIterable, Codable, Sendable, Hashable {
     case claude
     case codex
 

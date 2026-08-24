@@ -159,10 +159,16 @@ public enum OAuthCallbackParser {
             guard let parsedCode = items.first(where: { $0.name == "code" })?.value else {
                 throw OAuthLoginError.invalidCallback
             }
+            guard let parsedState = items.first(where: { $0.name == "state" })?.value else {
+                throw OAuthLoginError.stateMismatch
+            }
             code = parsedCode
-            state = items.first(where: { $0.name == "state" })?.value ?? expectedState
+            state = parsedState
         } else {
-            code = trimmed
+            // Claude's platform callback page displays a manual code followed
+            // by a display-only fragment (`<code>#<fragment>`). Only the part
+            // before `#` is the authorization code accepted by token exchange.
+            code = String(trimmed.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first ?? "")
             state = expectedState
         }
 
@@ -191,12 +197,23 @@ public enum OAuthTokenResponseDecoder {
         now: Date = Date(),
         fallbackRefreshToken: String? = nil
     ) throws -> OAuthCredential {
+        struct Account: Decodable {
+            let uuid: String?
+            let emailAddress: String?
+
+            enum CodingKeys: String, CodingKey {
+                case uuid
+                case emailAddress = "email_address"
+            }
+        }
+
         struct Response: Decodable {
             let accessToken: String?
             let refreshToken: String?
             let expiresIn: TimeInterval?
             let accountID: String?
             let idToken: String?
+            let account: Account?
 
             enum CodingKeys: String, CodingKey {
                 case accessToken = "access_token"
@@ -204,6 +221,7 @@ public enum OAuthTokenResponseDecoder {
                 case expiresIn = "expires_in"
                 case accountID = "account_id"
                 case idToken = "id_token"
+                case account
             }
         }
 
@@ -218,10 +236,12 @@ public enum OAuthTokenResponseDecoder {
         let accessClaims = Self.jwtClaims(accessToken)
         let responseAccountID = response.accountID?.trimmingCharacters(in: .whitespacesAndNewlines)
         let accountID = (responseAccountID?.isEmpty == false ? responseAccountID : nil)
+            ?? response.account?.uuid
             ?? (claims?["https://api.openai.com/auth"] as? [String: Any])?["chatgpt_account_id"] as? String
             ?? Self.stableIdentity(from: claims)
             ?? Self.stableIdentity(from: accessClaims)
-        let email = (claims?["email"] as? String)
+        let email = response.account?.emailAddress
+            ?? (claims?["email"] as? String)
             ?? (accessClaims?["email"] as? String)
         guard accountID != nil || !(email?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) else {
             throw OAuthLoginError.missingAccountIdentity

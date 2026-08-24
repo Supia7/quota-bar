@@ -1,4 +1,8 @@
 "app.name" = "QuotaBar";
+"monitor.title" = "Uso";
+"usage.today" = "Hoy";
+"usage.tokens_format" = "%@ tokens";
+"usage.sessions_format" = "%d sesiones";
 "common.back" = "Atrás";
 "common.cancel" = "Cancelar";
 "common.close" = "Cerrar";
@@ -52,6 +56,8 @@
 "monitor.oauth_only" = "Solo OAuth";
 "monitor.refresh" = "Actualizar cuota";
 "monitor.view" = "Vista";
+"monitor.reset_detected_format" = "%1$@ cuota restablecida · %2$@ está ahora al %3$d%%.";
+"notification.quota_reset_title" = "Restablecimiento de cuota detectado";
 "error.duplicate" = "Esta cuenta OAuth ya está conectada.";
 "error.usage_validation" = "El inicio de sesión funcionó, pero no se pudo verificar la cuota. La cuenta no se guardó.";
 "error.state_mismatch" = "El state del callback no coincide. Inicia sesión de nuevo.";

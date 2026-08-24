@@ -54,6 +54,24 @@ enum QuotaBarChecks {
             // expected
         }
 
+        let claudeManualCode = try OAuthCallbackParser.parse(
+            "claude-code-fixture#display-fragment-fixture",
+            expectedState: "state"
+        )
+        try check(
+            claudeManualCode.code == "claude-code-fixture",
+            "Claude manual authorization codes must drop the display fragment"
+        )
+        do {
+            _ = try OAuthCallbackParser.parse(
+                "https://platform.claude.com/oauth/code/callback?code=missing-state-code",
+                expectedState: "state"
+            )
+            throw CheckFailure("OAuth callback URLs must not accept a missing state")
+        } catch OAuthLoginError.stateMismatch {
+            // expected
+        }
+
         let loopbackCapture = LoopbackCapture()
         let loopbackServer = OAuthLoopbackCallbackServer(port: 41455)
         try loopbackServer.start(
@@ -168,6 +186,209 @@ enum QuotaBarChecks {
             limitGroups.first(where: { $0.kind == .weekly })?.rows.count == 2,
             "weekly limit group must contain every matching account"
         )
+
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let usageNow = Date(timeIntervalSince1970: 1_780_000_000)
+        let usageFormatter = ISO8601DateFormatter()
+        usageFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plainUsageFormatter = ISO8601DateFormatter()
+        plainUsageFormatter.formatOptions = [.withInternetDateTime]
+        let claudeUsageFixtureURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quotabar-claude-usage-\(UUID().uuidString).jsonl")
+        let claudeUsageRecords: [[String: Any]] = [
+            [
+                "type": "assistant",
+                "timestamp": usageFormatter.string(from: usageNow.addingTimeInterval(60)),
+                "sessionId": "claude-session",
+                "message": [
+                    "model": "claude-sonnet-4",
+                    "usage": [
+                        "input_tokens": 100,
+                        "output_tokens": 50,
+                        "cache_read_input_tokens": 20,
+                        "cache_creation_input_tokens": 10
+                    ] as [String: Int]
+                ] as [String: Any]
+            ],
+            [
+                "type": "assistant",
+                "timestamp": plainUsageFormatter.string(from: usageNow.addingTimeInterval(120)),
+                "sessionId": "claude-session",
+                "message": [
+                    "model": "claude-sonnet-4",
+                    "usage": [
+                        "input_tokens": 200,
+                        "output_tokens": 100,
+                        "cache_read_input_tokens": 30,
+                        "cache_creation_input_tokens": 5
+                    ] as [String: Int]
+                ] as [String: Any]
+            ]
+        ]
+        let claudeUsageFixture = "{malformed-json-line}\n" + (try claudeUsageRecords.map { record in
+            String(data: try JSONSerialization.data(withJSONObject: record), encoding: .utf8)!
+        }.joined(separator: "\n") + "\n")
+        try Data(claudeUsageFixture.utf8).write(to: claudeUsageFixtureURL)
+
+        let codexUsageFixtureURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quotabar-codex-usage-\(UUID().uuidString).jsonl")
+        let codexUsageRecord: [String: Any] = [
+            "type": "event_msg",
+            "timestamp": usageFormatter.string(from: usageNow.addingTimeInterval(180)),
+            "payload": [
+                "type": "token_count",
+                "session_id": "codex-session",
+                "info": [
+                    "model": "gpt-5.3-codex",
+                    "last_token_usage": [
+                        "input_tokens": 100,
+                        "cached_input_tokens": 40,
+                        "output_tokens": 25,
+                        "reasoning_output_tokens": 5
+                    ] as [String: Int]
+                ] as [String: Any]
+            ] as [String: Any]
+        ]
+        let codexUsageFixture = String(
+            data: try JSONSerialization.data(withJSONObject: codexUsageRecord),
+            encoding: .utf8
+        )! + "\n"
+        try Data(codexUsageFixture.utf8).write(to: codexUsageFixtureURL)
+
+        let localUsageScanner = LocalUsageScanner()
+        let claudeUsage = try localUsageScanner.scan(
+            files: [claudeUsageFixtureURL],
+            provider: .claude,
+            now: usageNow,
+            calendar: utcCalendar
+        )
+        let codexUsage = try localUsageScanner.scan(
+            files: [codexUsageFixtureURL],
+            provider: .codex,
+            now: usageNow,
+            calendar: utcCalendar
+        )
+        try check(
+            claudeUsage.inputTokens == 300
+                && claudeUsage.outputTokens == 150
+                && claudeUsage.cacheReadTokens == 50
+                && claudeUsage.cacheWriteTokens == 15
+                && claudeUsage.requestCount == 2
+                && claudeUsage.sessionCount == 1
+                && claudeUsage.totalTokens == 515,
+            "Claude local session usage must aggregate today's token and cache fields"
+        )
+        try check(
+            codexUsage.inputTokens == 100
+                && codexUsage.outputTokens == 25
+                && codexUsage.cacheReadTokens == 40
+                && codexUsage.requestCount == 1
+                && codexUsage.sessionCount == 1,
+            "Codex local session usage must read last_token_usage without double-counting events"
+        )
+        try? FileManager.default.removeItem(at: claudeUsageFixtureURL)
+        try? FileManager.default.removeItem(at: codexUsageFixtureURL)
+
+        let discoveryHome = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quotabar-local-usage-home-\(UUID().uuidString)")
+        let discoveryClaudeDirectory = discoveryHome
+            .appendingPathComponent(".claude/projects/sample", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: discoveryClaudeDirectory,
+            withIntermediateDirectories: true
+        )
+        let discoveryClaudeURL = discoveryClaudeDirectory.appendingPathComponent("session.jsonl")
+        let discoveryNow = Date()
+        let discoveryRecord: [String: Any] = [
+            "type": "assistant",
+            "timestamp": ISO8601DateFormatter().string(from: discoveryNow),
+            "sessionId": "discovered-session",
+            "message": [
+                "usage": ["input_tokens": 10, "output_tokens": 5] as [String: Int]
+            ] as [String: Any]
+        ]
+        try String(
+            data: JSONSerialization.data(withJSONObject: discoveryRecord),
+            encoding: .utf8
+        )!.appending("\n").write(to: discoveryClaudeURL, atomically: true, encoding: .utf8)
+        let discoveredUsage = LocalUsageScanner(homeDirectory: discoveryHome).scanToday(at: discoveryNow)
+        try check(
+            discoveredUsage[.claude]?.requestCount == 1
+                && discoveredUsage[.claude]?.totalTokens == 15,
+            "local usage discovery must find today's Claude JSONL under the user's config directory"
+        )
+        try? FileManager.default.removeItem(at: discoveryHome)
+
+        let liveLocalUsage = LocalUsageScanner().scanToday()
+        try check(
+            liveLocalUsage.values.allSatisfy {
+                $0.requestCount >= 0
+                    && $0.sessionCount >= 0
+                    && $0.totalTokens >= 0
+            },
+            "live local usage scanning must return bounded non-negative summaries"
+        )
+
+        let resetAccountID = UUID(uuidString: "00000000-0000-0000-0000-000000000099")!
+        let previousCodex = QuotaAccount(
+            id: resetAccountID,
+            provider: .codex,
+            alias: "Reset Codex",
+            email: "reset-codex@example.com",
+            windows: [
+                QuotaWindow(
+                    id: "codex-weekly",
+                    kind: .weekly,
+                    title: "Weekly",
+                    remainingFraction: 0.31,
+                    resetAt: Date(timeIntervalSince1970: 1_780_000_000)
+                )
+            ],
+            isSampleData: false
+        )
+        let currentCodex = QuotaAccount(
+            id: resetAccountID,
+            provider: .codex,
+            alias: "Reset Codex",
+            email: "reset-codex@example.com",
+            windows: [
+                QuotaWindow(
+                    id: "codex-weekly",
+                    kind: .weekly,
+                    title: "Weekly",
+                    remainingFraction: 1,
+                    resetAt: Date(timeIntervalSince1970: 1_780_001_000)
+                )
+            ],
+            isSampleData: false
+        )
+        let resetEvents = QuotaResetDetector.detect(
+            previous: QuotaResetDetector.observations(from: [previousCodex]),
+            current: [currentCodex],
+            at: Date(timeIntervalSince1970: 1_780_001_100)
+        )
+        try check(
+            resetEvents.count == 1
+                && resetEvents[0].provider == .codex
+                && resetEvents[0].currentRemainingPercentage == 100,
+            "Codex recovery to full quota must emit one reset event"
+        )
+        try check(
+            QuotaResetDetector.detect(previous: [], current: [currentCodex]).isEmpty,
+            "the first quota observation must establish a baseline without notifying"
+        )
+        let observationURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("quotabar-reset-observations-\(UUID().uuidString).json")
+        let observationStore = JSONQuotaResetObservationStore(fileURL: observationURL)
+        let observations = QuotaResetDetector.observations(from: [currentCodex])
+        try observationStore.save(observations)
+        let loadedObservations = try observationStore.load()
+        try check(
+            loadedObservations == observations,
+            "reset observations must round-trip without credentials"
+        )
+        try? FileManager.default.removeItem(at: observationURL)
 
         let claudeFixture = try JSONSerialization.data(withJSONObject: [
             "five_hour": [
@@ -409,6 +630,24 @@ enum QuotaBarChecks {
                 && tokenCredential.refreshToken == "refresh-fixture"
                 && tokenCredential.accountID == "account-fixture",
             "OAuth token response must decode into an in-memory credential"
+        )
+        let claudeNestedAccountFixture = try JSONSerialization.data(withJSONObject: [
+            "access_token": "claude-access-fixture",
+            "refresh_token": "claude-refresh-fixture",
+            "expires_in": 28800,
+            "account": [
+                "uuid": "claude-account-fixture",
+                "email_address": "claude@example.com"
+            ] as [String: String]
+        ] as [String: Any])
+        let claudeNestedCredential = try OAuthTokenResponseDecoder.decode(
+            claudeNestedAccountFixture,
+            provider: .claude
+        )
+        try check(
+            claudeNestedCredential.accountID == "claude-account-fixture"
+                && claudeNestedCredential.email == "claude@example.com",
+            "Claude token response must decode nested account identity"
         )
         let claimIdentityFixture = try JSONSerialization.data(withJSONObject: [
             "access_token": "eyJhbGciOiJub25lIn0.eyJzdWIiOiJzdGFibGUtc3ViIn0.c2ln",

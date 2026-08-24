@@ -34,6 +34,7 @@ jobs:
           bash -n Scripts/install-release.sh
           bash -n Scripts/generate-app-icon.sh
           bash Scripts/check-menu-bar-host.sh
+          python3 Scripts/check-popover-layout.py
           test -f Resources/QuotaBar.icns
           test "$(plutil -extract CFBundleIconFile raw -o - Resources/Info.plist)" = "QuotaBar"
           git diff --check
