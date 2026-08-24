@@ -1,4 +1,8 @@
 "app.name" = "QuotaBar";
+"monitor.title" = "使用量";
+"usage.today" = "今日";
+"usage.tokens_format" = "%@ トークン";
+"usage.sessions_format" = "%d セッション";
 "common.back" = "戻る";
 "common.cancel" = "キャンセル";
 "common.close" = "閉じる";
@@ -52,6 +56,8 @@
 "monitor.oauth_only" = "OAuthのみ";
 "monitor.refresh" = "quotaを更新";
 "monitor.view" = "表示";
+"monitor.reset_detected_format" = "%1$@ quotaのリセットを検知 · %2$@は現在%3$d%%です。";
+"notification.quota_reset_title" = "Quotaのリセットを検知";
 "error.duplicate" = "このOAuthアカウントはすでに接続されています。";
 "error.usage_validation" = "サインインは成功しましたが、quotaを確認できませんでした。アカウントは保存されていません。";
 "error.state_mismatch" = "callback stateが一致しません。もう一度サインインしてください。";

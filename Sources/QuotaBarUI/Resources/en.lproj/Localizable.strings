@@ -1,4 +1,8 @@
 "app.name" = "QuotaBar";
+"monitor.title" = "Usage";
+"usage.today" = "Today";
+"usage.tokens_format" = "%@ tokens";
+"usage.sessions_format" = "%d sessions";
 "common.back" = "Back";
 "common.cancel" = "Cancel";
 "common.close" = "Close";
@@ -52,6 +56,8 @@
 "monitor.oauth_only" = "OAuth only";
 "monitor.refresh" = "Refresh quota data";
 "monitor.view" = "View";
+"monitor.reset_detected_format" = "%1$@ quota reset detected · %2$@ is now %3$d%%.";
+"notification.quota_reset_title" = "Quota reset detected";
 "error.duplicate" = "This OAuth account is already connected.";
 "error.usage_validation" = "Sign-in succeeded, but quota could not be verified. The account was not saved.";
 "error.state_mismatch" = "The callback state did not match. Start sign-in again.";

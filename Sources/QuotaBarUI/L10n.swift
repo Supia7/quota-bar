@@ -22,7 +22,23 @@ public enum L10n {
         String(format: string("limit.accounts_format"), count)
     }
 
+    public static func localUsageTokens(_ count: Int) -> String {
+        String(format: string("usage.tokens_format"), LocalUsageFormatter.tokenCount(count))
+    }
+
+    public static func localUsageSessions(_ count: Int) -> String {
+        String(format: string("usage.sessions_format"), count)
+    }
+
     public static func viewTitle(_ mode: UsageViewMode) -> String {
         string(mode == .account ? "view.accounts" : "view.limit_types")
+    }
+
+    public static func resetNotice(_ event: QuotaResetEvent) -> String {
+        String(format: string("monitor.reset_detected_format"),
+            event.provider.displayName,
+            windowTitle(event.windowKind),
+            event.currentRemainingPercentage
+        )
     }
 }

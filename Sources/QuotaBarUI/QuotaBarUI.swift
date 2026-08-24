@@ -25,6 +25,8 @@ public final class QuotaBarModel: ObservableObject {
     @Published public private(set) var isRefreshing = false
     @Published public private(set) var errorMessage: String?
     @Published public private(set) var updateState: QuotaBarUpdateState = .idle
+    @Published public private(set) var resetNotices: [QuotaResetEvent] = []
+    @Published public private(set) var localUsage: [QuotaProviderID: LocalUsageSummary] = [:]
     @Published public var viewMode: UsageViewMode {
         didSet {
             UserDefaults.standard.set(viewMode.rawValue, forKey: Self.viewModeDefaultsKey)
@@ -38,26 +40,37 @@ public final class QuotaBarModel: ObservableObject {
     private let preferenceStore: JSONAccountDisplayPreferencesStore
     private var displayPreferences: [UUID: AccountDisplayPreference]
     private var pollingTask: Task<Void, Never>?
+    private var localUsageTask: Task<Void, Never>?
     private var updateCheckTask: Task<Void, Never>?
     private let updateChecker: GitHubReleaseUpdateChecker
     private let currentVersion: ReleaseVersion
+    private let resetObservationStore: JSONQuotaResetObservationStore
+    private let localUsageScanner: LocalUsageScanner
+    private var resetObservations: [QuotaResetObservation]
+
+    public var resetHandler: (@MainActor ([QuotaResetEvent]) -> Void)?
 
     public init(
         provider: (any QuotaProvider)? = nil,
         registryStore: JSONAccountRegistryStore = JSONAccountRegistryStore(),
         preferenceStore: JSONAccountDisplayPreferencesStore = JSONAccountDisplayPreferencesStore(),
         updateChecker: GitHubReleaseUpdateChecker = GitHubReleaseUpdateChecker(),
-        currentVersion: ReleaseVersion? = nil
+        currentVersion: ReleaseVersion? = nil,
+        resetObservationStore: JSONQuotaResetObservationStore = JSONQuotaResetObservationStore(),
+        localUsageScanner: LocalUsageScanner = LocalUsageScanner()
     ) {
         self.registryStore = registryStore
         self.preferenceStore = preferenceStore
         self.updateChecker = updateChecker
+        self.resetObservationStore = resetObservationStore
+        self.localUsageScanner = localUsageScanner
+        self.resetObservations = (try? resetObservationStore.load()) ?? []
         let bundleVersion = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? "0.1.15"
+        ) as? String ?? "0.2.0"
         self.currentVersion = currentVersion
             ?? (try? ReleaseVersion(bundleVersion))
-            ?? ReleaseVersion(major: 0, minor: 1, patch: 15)
+            ?? ReleaseVersion(major: 0, minor: 2, patch: 0)
         let loadedRegistry = (try? registryStore.load()) ?? AccountRegistry()
         let registry = loadedRegistry.keychainOnly
         if registry != loadedRegistry {
@@ -75,11 +88,13 @@ public final class QuotaBarModel: ObservableObject {
         let storedMode = UserDefaults.standard.string(forKey: Self.viewModeDefaultsKey)
         viewMode = UsageViewMode(rawValue: storedMode ?? "") ?? .account
         startPolling()
+        startLocalUsagePolling()
         startUpdateChecking()
     }
 
     deinit {
         pollingTask?.cancel()
+        localUsageTask?.cancel()
         updateCheckTask?.cancel()
     }
 
@@ -110,9 +125,39 @@ public final class QuotaBarModel: ObservableObject {
     public func startPolling() {
         guard pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
-            guard let self else { return }
             while !Task.isCancelled {
-                await refresh()
+                if let self {
+                    await self.refresh()
+                } else {
+                    return
+                }
+                do {
+                    try await Task.sleep(for: Self.automaticRefreshInterval)
+                } catch {
+                    return
+                }
+            }
+        }
+    }
+
+    public func refreshLocalUsage() async {
+        let scanner = localUsageScanner
+        let summaries = await Task.detached(priority: .utility) {
+            scanner.scanToday()
+        }.value
+        guard !Task.isCancelled else { return }
+        localUsage = summaries
+    }
+
+    private func startLocalUsagePolling() {
+        guard localUsageTask == nil else { return }
+        localUsageTask = Task { [weak self] in
+            while !Task.isCancelled {
+                if let self {
+                    await self.refreshLocalUsage()
+                } else {
+                    return
+                }
                 do {
                     try await Task.sleep(for: Self.automaticRefreshInterval)
                 } catch {
@@ -125,9 +170,12 @@ public final class QuotaBarModel: ObservableObject {
     private func startUpdateChecking() {
         guard updateCheckTask == nil else { return }
         updateCheckTask = Task { [weak self] in
-            guard let self else { return }
             while !Task.isCancelled {
-                await checkForUpdates()
+                if let self {
+                    await self.checkForUpdates()
+                } else {
+                    return
+                }
                 do {
                     try await Task.sleep(for: .seconds(6 * 60 * 60))
                 } catch {
@@ -159,13 +207,33 @@ public final class QuotaBarModel: ObservableObject {
         defer { isRefreshing = false }
 
         do {
-            let fetched = try await provider.snapshot(at: Date())
-            accounts = fetched.map(applyDisplayPreference)
+            let now = Date()
+            let fetched = try await provider.snapshot(at: now)
+            let nextAccounts = fetched.map(applyDisplayPreference)
+            let resetEvents = QuotaResetDetector.detect(
+                previous: resetObservations,
+                current: nextAccounts,
+                at: now
+            )
+            resetObservations = QuotaResetDetector.observations(from: nextAccounts)
+            try? resetObservationStore.save(resetObservations)
+            accounts = nextAccounts
             errorMessage = nil
-            lastUpdated = Date()
+            lastUpdated = now
+            if !resetEvents.isEmpty {
+                let existingNoticeIDs = Set(resetNotices.map(\.id))
+                resetNotices.append(contentsOf: resetEvents.filter {
+                    !existingNoticeIDs.contains($0.id)
+                })
+                resetHandler?(resetEvents)
+            }
         } catch {
             errorMessage = message(for: error)
         }
+    }
+
+    public func dismissResetNotice(id: String) {
+        resetNotices.removeAll { $0.id == id }
     }
 
     public func account(id: UUID) -> QuotaAccount? {
@@ -209,6 +277,9 @@ public final class QuotaBarModel: ObservableObject {
             try? OAuthCredentialResolver().delete(descriptor)
         }
         configuredAccounts.removeAll { $0.id == id }
+        resetObservations.removeAll { $0.accountID == id }
+        resetNotices.removeAll { $0.accountID == id }
+        try? resetObservationStore.save(resetObservations)
         saveRegistry()
         provider = configuredAccounts.isEmpty
             ? EmptyQuotaProvider()
@@ -279,6 +350,7 @@ public struct QuotaMonitorView: View {
     private let updateAction: (@MainActor () -> Void)?
     @State private var editingAccount: QuotaAccount?
     @State private var isShowingSettings = false
+    @State private var refreshRotation = 0.0
 
     public init(
         model: QuotaBarModel,
@@ -302,11 +374,11 @@ public struct QuotaMonitorView: View {
                 monitorContent
             }
         }
-        .padding(16)
+        .padding(12)
         .frame(
-            minWidth: 560,
-            idealWidth: 620,
-            maxWidth: 680,
+            minWidth: 380,
+            idealWidth: 420,
+            maxWidth: 460,
             minHeight: preferredHeight,
             idealHeight: preferredHeight,
             maxHeight: preferredHeight
@@ -324,35 +396,64 @@ public struct QuotaMonitorView: View {
 
     private var preferredHeight: CGFloat {
         if isShowingSettings {
-            return 620
+            return 400
         }
         guard !model.groups.isEmpty else {
-            return 240
+            return 300
         }
-        let rowCount = model.viewMode == .account
-            ? model.accounts.count
-            : model.groups.reduce(0) { $0 + $1.rows.count }
-        let groupSpacing = max(0, model.groups.count - 1) * 12
-        let estimated = 185 + CGFloat(rowCount * 56 + groupSpacing)
-        return min(max(estimated, 260), 560)
+        let providerCount = max(providerGroups.count, 1)
+        let additionalAccountCount = max(0, model.accounts.count - providerCount)
+        let secondaryWindowCount = model.accounts.reduce(0) { total, account in
+            total + max(0, account.windows.count - 1)
+        }
+        let estimated = 110
+            + CGFloat(providerCount * 150)
+            + CGFloat(secondaryWindowCount * 30)
+            + CGFloat(model.localUsage.count * 24)
+            + CGFloat(additionalAccountCount * 44)
+        return min(max(estimated, 320), 500)
+    }
+
+    private var providerGroups: [ProviderAccountGroup] {
+        let providerOrder: [QuotaProviderID] = [.codex, .claude]
+        return providerOrder.compactMap { provider in
+            let accounts = model.accounts.filter { $0.provider == provider }
+            guard !accounts.isEmpty else { return nil }
+            return ProviderAccountGroup(provider: provider, accounts: accounts)
+        }
     }
 
     private var monitorContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             header
-            Picker(L10n.string("monitor.view"), selection: $model.viewMode) {
-                ForEach(UsageViewMode.allCases, id: \.self) { mode in
-                    Text(L10n.viewTitle(mode)).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-
             Divider()
+
+            if let resetNotice = model.resetNotices.last {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "arrow.clockwise.circle.fill")
+                        .foregroundStyle(.orange)
+                    Text(L10n.resetNotice(resetNotice))
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        model.dismissResetNotice(id: resetNotice.id)
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(L10n.string("common.close"))
+                }
+                .padding(8)
+                .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                .padding(.top, 10)
+            }
 
             if let errorMessage = model.errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.orange)
+                    .padding(.top, 8)
             }
 
             if model.groups.isEmpty {
@@ -361,170 +462,428 @@ public struct QuotaMonitorView: View {
                     systemImage: "chart.bar.xaxis",
                     description: Text(L10n.string("monitor.no_data_description"))
                 )
-                .frame(minHeight: 150)
-            } else {
+                .frame(minHeight: 120)
+                .padding(.vertical, 8)
+            } else if model.viewMode == .account {
                 ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(model.groups) { group in
-                            if let account = group.account {
-                                AccountQuotaCard(
-                                    account: account,
-                                    rows: group.rows,
-                                    onEdit: { editingAccount = account }
-                                )
-                            } else {
-                                LimitTypeCard(
-                                    group: group,
-                                    onEdit: { accountID in
-                                        editingAccount = model.account(id: accountID)
-                                    }
-                                )
+                    LazyVStack(spacing: 0) {
+                        ForEach(Array(providerGroups.enumerated()), id: \.element.id) { index, group in
+                            ProviderQuotaBlock(
+                                group: group,
+                                todayUsage: model.localUsage[group.provider]
+                            ) { account in
+                                editingAccount = account
+                            }
+                            if index < providerGroups.count - 1 {
+                                Divider()
+                                    .padding(.horizontal, 16)
                             }
                         }
                     }
                 }
                 .scrollIndicators(.hidden)
-                .frame(maxHeight: 560)
+                .frame(maxHeight: 440)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(model.groups) { group in
+                            LimitTypeCard(
+                                group: group,
+                                onEdit: { accountID in
+                                    editingAccount = model.account(id: accountID)
+                                }
+                            )
+                        }
+                    }
+                }
+                .scrollIndicators(.hidden)
+                .frame(maxHeight: 440)
             }
 
             Divider()
-            footer
+                .padding(.top, 4)
+            viewToolbar
         }
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L10n.string("app.name"))
-                    .font(.title2.weight(.semibold))
-                if model.isSampleData {
-                    Text(L10n.string("monitor.sample_data"))
-                        .font(.caption2.weight(.bold))
-                        .tracking(1.1)
-                        .foregroundStyle(.orange)
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.string("monitor.title"))
+                    .font(.headline.weight(.semibold))
+                HStack(spacing: 4) {
+                    if model.isSampleData {
+                        Text(L10n.string("monitor.sample_data"))
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.orange)
+                    }
+                    if let lastUpdated = model.lastUpdated {
+                        Text(L10n.string("monitor.updated"))
+                        Text(lastUpdated, style: .relative)
+                            .monospacedDigit()
+                    } else {
+                        Text(L10n.string("monitor.not_updated"))
+                    }
                 }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
-            Spacer()
+
+            Spacer(minLength: 0)
+
+            Circle()
+                .fill(refreshStatusColor)
+                .frame(width: 7, height: 7)
+                .padding(.top, 8)
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.7)) {
+                    refreshRotation += 360
+                }
+                Task { await model.refresh() }
+            } label: {
+                Image(systemName: model.isRefreshing
+                    ? "arrow.triangle.2.circlepath"
+                    : "arrow.clockwise")
+                    .rotationEffect(.degrees(refreshRotation))
+            }
+            .buttonStyle(PopoverIconButtonStyle())
+            .help(L10n.string("monitor.refresh"))
+            .accessibilityLabel(L10n.string("monitor.refresh"))
+
             if let updateAction {
                 Button(action: updateAction) {
-                    Label(L10n.string("update.check"), systemImage: "arrow.down.circle")
+                    Image(systemName: "arrow.down.circle")
                 }
-                .font(.caption.weight(.semibold))
-                .buttonStyle(.borderless)
-                .foregroundStyle(.blue)
+                .buttonStyle(PopoverIconButtonStyle())
+                .help(L10n.string("update.check"))
+                .accessibilityLabel(L10n.string("update.check"))
             } else if let release = model.availableRelease {
                 Link(destination: release.pageURL) {
-                    Label(L10n.updateAvailable(release.version.description), systemImage: "arrow.down.circle")
+                    Image(systemName: "arrow.down.circle.fill")
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.blue)
+                .buttonStyle(PopoverIconButtonStyle())
+                .help(L10n.updateAvailable(release.version.description))
+                .accessibilityLabel(L10n.updateAvailable(release.version.description))
             }
+
             Button {
                 isShowingSettings = true
             } label: {
-                Label(L10n.string("settings.title"), systemImage: "gearshape")
+                Image(systemName: "gearshape")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(PopoverIconButtonStyle())
             .help(L10n.string("settings.title"))
-            Button {
-                Task { await model.refresh() }
-            } label: {
-                Image(systemName: model.isRefreshing ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
-            }
-            .buttonStyle(.borderless)
-            .help(L10n.string("monitor.refresh"))
-            .disabled(model.isRefreshing)
+            .accessibilityLabel(L10n.string("settings.title"))
         }
+        .padding(.top, 12)
+        .padding(.bottom, 10)
     }
 
-    private var footer: some View {
+    private var refreshStatusColor: Color {
+        if model.errorMessage != nil { return .orange }
+        if model.accounts.isEmpty { return .secondary }
+        return .green
+    }
+
+    private var viewToolbar: some View {
         HStack {
-            if let lastUpdated = model.lastUpdated {
-                Text(L10n.string("monitor.updated"))
-                Text(lastUpdated, style: .relative)
-            } else {
-                Text(L10n.string("monitor.not_updated"))
+            Picker(L10n.string("monitor.view"), selection: $model.viewMode) {
+                ForEach(UsageViewMode.allCases, id: \.self) { mode in
+                    Text(L10n.viewTitle(mode)).tag(mode)
+                }
             }
-            Spacer()
-            Text(L10n.string("monitor.oauth_only"))
+            .pickerStyle(.segmented)
+            .frame(width: 148)
+            Spacer(minLength: 0)
         }
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
     }
 }
 
-private struct AccountQuotaCard: View {
-    let account: QuotaAccount
-    let rows: [QuotaGroupRow]
-    let onEdit: () -> Void
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var isExpanded = false
+private struct PopoverIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: 26, height: 22)
+            .foregroundStyle(.secondary)
+            .background(
+                configuration.isPressed
+                    ? Color.primary.opacity(0.14)
+                    : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+}
+
+private struct ProviderAccountGroup: Identifiable {
+    let provider: QuotaProviderID
+    let accounts: [QuotaAccount]
+
+    var id: String { provider.rawValue }
+}
+
+private struct ProviderQuotaBlock: View {
+    let group: ProviderAccountGroup
+    let todayUsage: LocalUsageSummary?
+    let onEdit: (QuotaAccount) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(account.provider.tint)
-                    .frame(width: 8, height: 8)
-                HStack(spacing: 4) {
-                    Text(account.displayName)
-                        .font(.subheadline.weight(.semibold))
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 9) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(group.provider.tint)
+                    .frame(width: 22, height: 22)
+                    .overlay {
+                        Image(systemName: group.provider == .codex ? "curlybraces" : "sparkles")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(group.provider.displayName)
+                        .font(.headline.weight(.semibold))
+                    Text(group.accounts.count == 1
+                        ? group.accounts[0].displayName
+                        : L10n.accountCount(group.accounts.count))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    if let email = account.visibleEmail {
-                        Text("· \(email)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
                 }
-                Spacer()
-                HStack(spacing: 5) {
-                    ForEach(rows) { row in
-                        CompactQuotaBadge(window: row.window, tint: account.provider.tint)
-                    }
-                }
-                Button {
-                    withAnimation(.easeOut(duration: 0.15)) {
-                        isExpanded.toggle()
-                    }
-                } label: {
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                }
-                .buttonStyle(.borderless)
-                .help(L10n.string("account.toggle_details"))
-                Button(action: onEdit) {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .buttonStyle(.borderless)
-                .help(L10n.string("account.edit"))
+
+                Spacer(minLength: 0)
+                Circle()
+                    .fill(.green)
+                    .frame(width: 7, height: 7)
             }
 
-            if isExpanded {
+            if let primary = group.accounts.first {
+                ProviderPrimaryQuota(
+                    provider: group.provider,
+                    account: primary,
+                    todayUsage: todayUsage
+                )
+            }
+
+            ForEach(group.accounts.dropFirst()) { account in
                 Divider()
-                ForEach(rows) { row in
-                    QuotaWindowRow(window: row.window, tint: account.provider.tint)
-                }
+                    .padding(.top, 12)
+                CompactProviderAccountRow(
+                    provider: group.provider,
+                    account: account,
+                    onEdit: { onEdit(account) }
+                )
             }
         }
-        .padding(12)
-        .foregroundStyle(cardForeground)
-        .background(cardBackground, in: RoundedRectangle(cornerRadius: 12))
+        .padding(.vertical, 14)
+    }
+}
+
+private struct ProviderPrimaryQuota: View {
+    let provider: QuotaProviderID
+    let account: QuotaAccount
+    let todayUsage: LocalUsageSummary?
+
+    private var primaryWindow: QuotaWindow? {
+        primaryQuotaWindow(for: account, provider: provider)
     }
 
-    private var cardForeground: Color {
-        colorScheme == .dark ? .white : .black
+    private var secondaryWindows: [QuotaWindow] {
+        guard let primaryWindow else { return account.windows }
+        return account.windows.filter { $0.id != primaryWindow.id }
     }
 
-    private var cardBackground: Color {
-        colorScheme == .dark
-            ? Color(red: 0.16, green: 0.18, blue: 0.19)
-            : Color(red: 0.94, green: 0.95, blue: 0.96)
+    var body: some View {
+        if let primaryWindow {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .center, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(alignment: .firstTextBaseline, spacing: 1) {
+                            if let percentage = primaryWindow.remainingPercentage {
+                                Text("\(percentage)")
+                                    .font(.system(size: 36, weight: .semibold))
+                                    .monospacedDigit()
+                                    .foregroundStyle(quotaStatusColor(primaryWindow.remainingFraction))
+                                Text("%")
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(quotaStatusColor(primaryWindow.remainingFraction))
+                            } else {
+                                Text("—")
+                                    .font(.system(size: 36, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Text(primaryWindowLabel(primaryWindow, provider: provider))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: 104, alignment: .leading)
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        QuotaProgressBar(
+                            fraction: primaryWindow.remainingFraction,
+                            tint: quotaStatusColor(primaryWindow.remainingFraction),
+                            height: 7
+                        )
+                        HStack(spacing: 4) {
+                            Text(compactResetText(primaryWindow.resetAt))
+                                .font(.subheadline.weight(.medium))
+                                .monospacedDigit()
+                            Text(L10n.string("quota.resets"))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+                .padding(.top, 12)
+
+                if let todayUsage, !todayUsage.isEmpty {
+                    LocalUsageLine(summary: todayUsage)
+                        .padding(.top, 8)
+                }
+
+                ForEach(secondaryWindows) { window in
+                    CompactQuotaWindowRow(window: window)
+                        .padding(.top, 8)
+                }
+            }
+        } else {
+            Text(L10n.string("quota.unavailable"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 12)
+        }
+    }
+}
+
+private struct CompactProviderAccountRow: View {
+    let provider: QuotaProviderID
+    let account: QuotaAccount
+    let onEdit: () -> Void
+
+    private var primaryWindow: QuotaWindow? {
+        primaryQuotaWindow(for: account, provider: provider)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(provider.tint)
+                .frame(width: 7, height: 7)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(account.displayName)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                if let email = account.visibleEmail {
+                    Text(email)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+            if let primaryWindow {
+                VStack(alignment: .trailing, spacing: 1) {
+                    if let percentage = primaryWindow.remainingPercentage {
+                        Text("\(percentage)%")
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(quotaStatusColor(primaryWindow.remainingFraction))
+                    }
+                    Text(primaryWindowLabel(primaryWindow, provider: provider))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Button(action: onEdit) {
+                Image(systemName: "ellipsis.circle")
+            }
+            .buttonStyle(.borderless)
+            .help(L10n.string("account.edit"))
+            .accessibilityLabel(L10n.string("account.edit"))
+        }
+        .padding(.top, 10)
+    }
+}
+
+private struct LocalUsageLine: View {
+    let summary: LocalUsageSummary
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(L10n.string("usage.today"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Text(L10n.localUsageTokens(summary.totalTokens))
+                .font(.caption2.monospacedDigit().weight(.medium))
+            Text("·")
+                .foregroundStyle(.tertiary)
+            Text(L10n.localUsageSessions(summary.sessionCount))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct QuotaProgressBar: View {
+    let fraction: Double?
+    let tint: Color
+    let height: CGFloat
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.primary.opacity(0.1))
+                Capsule()
+                    .fill(tint)
+                    .frame(width: max(0, proxy.size.width * CGFloat(fraction ?? 0)))
+            }
+        }
+        .frame(height: height)
+    }
+}
+
+private struct CompactQuotaWindowRow: View {
+    let window: QuotaWindow
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Text(window.kind.compactLabel.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, alignment: .leading)
+            QuotaProgressBar(
+                fraction: window.remainingFraction,
+                tint: quotaStatusColor(window.remainingFraction),
+                height: 4
+            )
+            if let percentage = window.remainingPercentage {
+                Text("\(percentage)%")
+                    .font(.caption.monospacedDigit().weight(.medium))
+                    .foregroundStyle(quotaStatusColor(window.remainingFraction))
+                    .frame(width: 34, alignment: .trailing)
+            } else {
+                Text("—")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, alignment: .trailing)
+            }
+            Text(compactResetText(window.resetAt))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 42, alignment: .trailing)
+        }
     }
 }
 
 private struct CompactQuotaBadge: View {
     let window: QuotaWindow
-    let tint: Color
 
     var body: some View {
         HStack(spacing: 3) {
@@ -538,12 +897,63 @@ private struct CompactQuotaBadge: View {
                     .font(.caption2.weight(.semibold))
             }
         }
-        .foregroundStyle(tint)
+        .foregroundStyle(quotaStatusColor(window.remainingFraction))
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
-        .background(tint.opacity(0.12), in: Capsule())
+        .background(quotaStatusColor(window.remainingFraction).opacity(0.12), in: Capsule())
     }
 }
+
+private func primaryQuotaWindow(
+    for account: QuotaAccount,
+    provider: QuotaProviderID
+) -> QuotaWindow? {
+    let preferredKinds: [QuotaWindowKind] = provider == .codex
+        ? [.weekly, .fiveHour, .fableWeekly]
+        : [.fiveHour, .weekly, .fableWeekly]
+    for kind in preferredKinds {
+        if let window = account.windows.first(where: { $0.kind == kind }) {
+            return window
+        }
+    }
+    return account.windows.first
+}
+
+private func primaryWindowLabel(
+    _ window: QuotaWindow,
+    provider: QuotaProviderID
+) -> String {
+    switch window.kind {
+    case .fiveHour:
+        return "5HOUR"
+    case .weekly:
+        return provider == .claude ? "ALL" : "WEEKLY"
+    case .fableWeekly:
+        return "FABLE"
+    }
+}
+
+private func quotaStatusColor(_ fraction: Double?) -> Color {
+    guard let fraction else { return .secondary }
+    if fraction > 0.5 { return .green }
+    if fraction > 0.2 { return .yellow }
+    if fraction > 0 { return .orange }
+    return .red
+}
+
+private func compactResetText(_ date: Date?) -> String {
+    guard let date else { return "—" }
+    let totalMinutes = max(1, Int((date.timeIntervalSinceNow / 60).rounded()))
+    if totalMinutes < 60 {
+        return "\(totalMinutes)m"
+    }
+    let totalHours = totalMinutes / 60
+    if totalHours < 24 {
+        return "\(totalHours)h\(totalMinutes % 60)m"
+    }
+    return "\(totalHours / 24)d\(totalHours % 24)h"
+}
+
 
 private struct LimitTypeCard: View {
     let group: QuotaGroup
@@ -578,7 +988,7 @@ private struct LimitTypeCard: View {
                         }
                     }
                     Spacer()
-                    CompactQuotaBadge(window: row.window, tint: row.provider.tint)
+                    CompactQuotaBadge(window: row.window)
                     Button {
                         onEdit(row.accountID)
                     } label: {

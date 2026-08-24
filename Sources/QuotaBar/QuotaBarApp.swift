@@ -7,6 +7,7 @@ import SwiftUI
 final class QuotaBarAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let model = QuotaBarModel()
     private let updater = QuotaBarSparkleUpdater()
+    private let resetNotifier = QuotaResetNotifier()
     private let popover = NSPopover()
     private var statusItem: NSStatusItem?
     private var hostingController: NSHostingController<QuotaMonitorView>?
@@ -15,13 +16,20 @@ final class QuotaBarAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDeleg
         let application = NSApplication.shared
         let delegate = QuotaBarAppDelegate()
         application.delegate = delegate
-        application.setActivationPolicy(.accessory)
+        // Start as a regular app so LaunchServices/Control Center fully
+        // initializes the status-item scene before we hide the Dock entry.
+        application.setActivationPolicy(.regular)
         application.run()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        model.resetHandler = { [weak self] events in
+            self?.resetNotifier.notify(events)
+        }
         configureStatusItem()
         configurePopover()
+        // The app is a menu-bar accessory after its status-item scene exists.
+        NSApp.setActivationPolicy(.accessory)
         scheduleVisibilityFallbackCheck()
     }
 
@@ -31,6 +39,9 @@ final class QuotaBarAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDeleg
 
     private func configureStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // Give Control Center a stable identity instead of a PID-derived item
+        // name, which can retain a broken visibility/position record on macOS.
+        item.autosaveName = "com.supia.quotabar.status-item"
         guard let button = item.button else {
             return
         }
@@ -55,14 +66,15 @@ final class QuotaBarAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDeleg
             updateAction: updater.checkForUpdates
         )
         let hostingController = NSHostingController(rootView: rootView)
-        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
         self.hostingController = hostingController
 
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
         popover.contentViewController = hostingController
-        popover.contentSize = NSSize(width: 620, height: 240)
+        // Leave room for the compact header, provider blocks, view switcher,
+        // and settings' scroll viewport. Long account lists remain scrollable.
+        popover.contentSize = NSSize(width: 420, height: 500)
     }
 
     @objc private func togglePopover(_ sender: Any?) {
@@ -93,9 +105,10 @@ final class QuotaBarAppDelegate: NSObject, NSApplicationDelegate, NSPopoverDeleg
             guard let self, let statusItem else { return }
             guard !statusItem.isVisible else { return }
 
-            // macOS can hide a Menu Bar item from System Settings. Keep a Dock
-            // entry available instead of leaving the user with no entry point.
-            NSApp.setActivationPolicy(.regular)
+            // Do not switch activation policy here. On macOS 26, changing an
+            // LSUIElement/accessory app to regular after Control Center has
+            // created the status-item scene can make the item disappear.
+            NSLog("[QuotaBar] status item is not visible after launch")
         }
     }
 
