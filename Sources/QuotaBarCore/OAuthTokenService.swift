@@ -65,7 +65,8 @@ public struct OAuthTokenService: Sendable {
                 clientID: "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
                 tokenURL: URL(string: "https://platform.claude.com/v1/oauth/token")!,
                 policy: .claudeToken,
-                usesJSON: true
+                // Claude's token endpoint expects form-urlencoded fields.
+                usesJSON: false
             )
         case .codex:
             Configuration(

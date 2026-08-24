@@ -1,4 +1,8 @@
 "app.name" = "QuotaBar";
+"monitor.title" = "사용량";
+"usage.today" = "오늘";
+"usage.tokens_format" = "%@ 토큰";
+"usage.sessions_format" = "%d개 세션";
 "common.back" = "뒤로";
 "common.cancel" = "취소";
 "common.close" = "닫기";
@@ -52,6 +56,8 @@
 "monitor.oauth_only" = "OAuth 전용";
 "monitor.refresh" = "quota 새로고침";
 "monitor.view" = "보기";
+"monitor.reset_detected_format" = "%1$@ quota 초기화 감지 · %2$@ 잔여량이 현재 %3$d%%입니다.";
+"notification.quota_reset_title" = "Quota 초기화 감지";
 "error.duplicate" = "이미 연결된 OAuth 계정입니다.";
 "error.usage_validation" = "로그인은 성공했지만 quota를 확인하지 못했습니다. 계정을 저장하지 않았습니다.";
 "error.state_mismatch" = "callback state가 일치하지 않습니다. 다시 로그인하세요.";
