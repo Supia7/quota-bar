@@ -159,8 +159,11 @@ public enum OAuthCallbackParser {
             guard let parsedCode = items.first(where: { $0.name == "code" })?.value else {
                 throw OAuthLoginError.invalidCallback
             }
+            guard let parsedState = items.first(where: { $0.name == "state" })?.value else {
+                throw OAuthLoginError.stateMismatch
+            }
             code = parsedCode
-            state = items.first(where: { $0.name == "state" })?.value ?? expectedState
+            state = parsedState
         } else {
             // Claude's platform callback page displays a manual code followed
             // by a display-only fragment (`<code>#<fragment>`). Only the part

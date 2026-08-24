@@ -62,6 +62,15 @@ enum QuotaBarChecks {
             claudeManualCode.code == "claude-code-fixture",
             "Claude manual authorization codes must drop the display fragment"
         )
+        do {
+            _ = try OAuthCallbackParser.parse(
+                "https://platform.claude.com/oauth/code/callback?code=missing-state-code",
+                expectedState: "state"
+            )
+            throw CheckFailure("OAuth callback URLs must not accept a missing state")
+        } catch OAuthLoginError.stateMismatch {
+            // expected
+        }
 
         let loopbackCapture = LoopbackCapture()
         let loopbackServer = OAuthLoopbackCallbackServer(port: 41455)
@@ -183,6 +192,8 @@ enum QuotaBarChecks {
         let usageNow = Date(timeIntervalSince1970: 1_780_000_000)
         let usageFormatter = ISO8601DateFormatter()
         usageFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plainUsageFormatter = ISO8601DateFormatter()
+        plainUsageFormatter.formatOptions = [.withInternetDateTime]
         let claudeUsageFixtureURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("quotabar-claude-usage-\(UUID().uuidString).jsonl")
         let claudeUsageRecords: [[String: Any]] = [
@@ -202,7 +213,7 @@ enum QuotaBarChecks {
             ],
             [
                 "type": "assistant",
-                "timestamp": usageFormatter.string(from: usageNow.addingTimeInterval(120)),
+                "timestamp": plainUsageFormatter.string(from: usageNow.addingTimeInterval(120)),
                 "sessionId": "claude-session",
                 "message": [
                     "model": "claude-sonnet-4",

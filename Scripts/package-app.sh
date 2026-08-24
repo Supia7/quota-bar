@@ -6,7 +6,7 @@ VERSION="${VERSION:-0.2.0}"
 ARCH="${ARCH:-$(uname -m)}"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/dist}"
 BUILD_BIN="${BUILD_BIN:-}"
-BUILD_NUMBER="${BUILD_NUMBER:-1}"
+BUILD_NUMBER="${BUILD_NUMBER:-24}"
 
 # Optional Developer ID signing / notarization.
 # When SIGN_IDENTITY is empty the script falls back to an ad-hoc signature,

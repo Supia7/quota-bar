@@ -235,8 +235,9 @@ public struct LocalUsageScanner: Sendable {
     private func parseDate(_ value: Any?, formatter: ISO8601DateFormatter) -> Date? {
         guard let value = value as? String else { return nil }
         if let date = formatter.date(from: value) { return date }
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: value)
+        let fractionalFormatter = ISO8601DateFormatter()
+        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractionalFormatter.date(from: value)
     }
 
     private func int(_ value: Any?) -> Int {

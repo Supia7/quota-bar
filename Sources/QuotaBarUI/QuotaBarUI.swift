@@ -125,9 +125,12 @@ public final class QuotaBarModel: ObservableObject {
     public func startPolling() {
         guard pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
-            guard let self else { return }
             while !Task.isCancelled {
-                await refresh()
+                if let self {
+                    await self.refresh()
+                } else {
+                    return
+                }
                 do {
                     try await Task.sleep(for: Self.automaticRefreshInterval)
                 } catch {
@@ -149,9 +152,12 @@ public final class QuotaBarModel: ObservableObject {
     private func startLocalUsagePolling() {
         guard localUsageTask == nil else { return }
         localUsageTask = Task { [weak self] in
-            guard let self else { return }
             while !Task.isCancelled {
-                await refreshLocalUsage()
+                if let self {
+                    await self.refreshLocalUsage()
+                } else {
+                    return
+                }
                 do {
                     try await Task.sleep(for: Self.automaticRefreshInterval)
                 } catch {
@@ -164,9 +170,12 @@ public final class QuotaBarModel: ObservableObject {
     private func startUpdateChecking() {
         guard updateCheckTask == nil else { return }
         updateCheckTask = Task { [weak self] in
-            guard let self else { return }
             while !Task.isCancelled {
-                await checkForUpdates()
+                if let self {
+                    await self.checkForUpdates()
+                } else {
+                    return
+                }
                 do {
                     try await Task.sleep(for: .seconds(6 * 60 * 60))
                 } catch {
