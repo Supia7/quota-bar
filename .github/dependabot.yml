@@ -1,0 +1,26 @@
+# 의존성 버전 업데이트 (월 1회 묶음 PR). 보안 취약점 PR은 별도로 즉시 온다.
+# 자동 머지 없음 — CI 통과 확인 후 수동 머지. major 는 알림 없이 수동 검토.
+version: 2
+updates:
+  - package-ecosystem: swift
+    directory: '/'
+    schedule:
+      interval: monthly
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: '*'
+        update-types: [version-update:semver-major]
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+    labels: [dependencies, github-actions]
